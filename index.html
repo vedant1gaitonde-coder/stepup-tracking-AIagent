@@ -1,125 +1,217 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-
-<title>Step Challenge AI Agent</title>
-
-<link rel="stylesheet" href="style.css">
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+  <title>Step Challenge</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 </head>
-
 <body>
 
-<h1>🏃 Step Challenge AI Agent</h1>
+<!-- AUTH PAGE -->
+<div id="authPage">
+  <div class="login-box">
+    <h1>🏃 Family Step Challenge</h1>
+    <p class="login-subtitle">Track your family's walking challenge</p>
 
-<div class="upload">
+    <!-- TABS -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuth('login')">Login</button>
+      <button class="auth-tab" onclick="switchAuth('signup')">Sign Up</button>
+    </div>
 
-<h2>Upload Daily File</h2>
+    <!-- LOGIN FORM -->
+    <div id="loginForm">
+      <input type="text" id="loginGroup" placeholder="Group Name" />
+      <input type="password" id="loginPassword" placeholder="Password" />
+      <p id="loginError" class="error-msg"></p>
+      <button onclick="login()">Login</button>
+    </div>
 
-<input type="file" id="fileInput">
+    <!-- SIGNUP FORM -->
+    <div id="signupForm" style="display:none">
+      <input type="text" id="signupGroup" placeholder="Choose Group Name" />
+      <input type="password" id="signupPassword" placeholder="Choose Password" />
+      <input type="password" id="signupConfirm" placeholder="Confirm Password" />
+      <p id="signupError" class="error-msg"></p>
+      <button onclick="signup()">Create Group</button>
+    </div>
 
-<br><br>
-
-<label>Select Date</label>
-
-<input type="date" id="dateInput">
-
-<br><br>
-
-<button onclick="runAgent()">Run AI Agent</button>
-
-<br><br>
-
-<button onclick="resetAll()">Reset Everything</button>
-
+  </div>
 </div>
 
-<div class="progressBox">
-<h2 id="progressText">Challenge Progress: 0 / 28 Days Completed</h2>
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none">
+
+  <div class="app-header">
+    <h1>🏃 Family Step Challenge</h1>
+    <div class="header-right">
+      <span id="groupLabel"></span>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- NAV BAR -->
+  <div class="nav-bar">
+    <div class="nav-link" onclick="showTab('upload')">📤 Upload</div>
+    <div class="nav-link" onclick="showTab('daily')">📅 Daily</div>
+    <div class="nav-link" onclick="showTab('weekly')">📊 Weekly</div>
+    <div class="nav-link" onclick="showTab('championship')">🏆 Championship</div>
+    <div class="nav-link" onclick="showTab('penalties')">😂 Penalties</div>
+    <div class="nav-link" onclick="showTab('history')">🕓 History</div>
+    <div class="nav-link" onclick="showTab('chart')">📈 Chart</div>
+    <div class="nav-link" onclick="showTab('manage')">⚙️ Manage</div>
+  </div>
+
+  <!-- TAB: UPLOAD -->
+  <div class="tab-content" id="upload">
+    <div class="progressBox">
+      <h2 id="progressText">Challenge Progress: 0 / 28 Days Completed</h2>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progressBar" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>📤 Upload Daily Steps File</h2>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      <br>
+      <label>Select Date:</label>
+      <input type="date" id="dateInput">
+      <br><br>
+      <button onclick="runAgent()">▶️ Run Agent</button>
+    </div>
+    <div class="card">
+      <h2>📅 Uploaded Dates</h2>
+      <ul id="uploadedDates"></ul>
+    </div>
+  </div>
+
+  <!-- TAB: DAILY -->
+  <div class="tab-content" id="daily">
+    <div class="card">
+      <h2>📅 Daily Scoreboard</h2>
+      <table id="dailyBoard">
+        <thead>
+          <tr>
+            <th>Rank</th><th>Name</th><th>Steps</th><th>Points</th><th>Note</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: WEEKLY -->
+  <div class="tab-content" id="weekly">
+    <div class="card">
+      <h2>📊 Weekly Scoreboard</h2>
+      <table id="weeklyBoard">
+        <thead>
+          <tr>
+            <th>Rank</th><th>Name</th><th>Weekly Steps</th><th>Total Points</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: CHAMPIONSHIP -->
+  <div class="tab-content" id="championship">
+    <div class="card">
+      <h2>🏆 4 Week Championship</h2>
+      <table id="monthBoard">
+        <thead>
+          <tr>
+            <th>Rank</th><th>Name</th><th>Total Points</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>👟 28 Day Total Steps</h2>
+      <table id="totalStepsTable">
+        <thead>
+          <tr>
+            <th>Name</th><th>Total Steps (28 Days)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: PENALTIES -->
+  <div class="tab-content" id="penalties">
+    <div class="card">
+      <h2>😂 20K Penalty Tracker</h2>
+      <p style="color:gray;font-size:13px;margin-bottom:16px">
+        Anyone crossing 20,000 steps loses 2 points and must complete a fun penalty!
+      </p>
+      <table id="penaltyTable">
+        <thead>
+          <tr>
+            <th>Date</th><th>Name</th><th>Steps</th><th>Points</th><th>Penalty</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: HISTORY -->
+  <div class="tab-content" id="history">
+    <div class="card">
+      <h2>🕓 View Day History</h2>
+      <input type="date" id="historyDate">
+      <button onclick="showHistory()">Show Data</button>
+      <p id="historyDayLabel" style="margin-top:12px;font-weight:bold;color:#1a1a2e"></p>
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th>Name</th><th>Steps</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: CHART -->
+  <div class="tab-content" id="chart">
+    <div class="card">
+      <h2>📈 28 Day Walking Chart</h2>
+      <select id="personSelect"></select>
+      <button onclick="generateChart()" class="secondary">Show Chart</button>
+      <canvas id="stepChart"></canvas>
+    </div>
+  </div>
+
+  <!-- TAB: MANAGE -->
+  <div class="tab-content" id="manage">
+    <div class="card">
+      <h2>🗑️ Delete a Single Day</h2>
+      <p style="color:gray;font-size:13px;margin-bottom:16px">
+        Points will be reversed automatically.
+      </p>
+      <input type="date" id="deleteDateInput">
+      <button onclick="deleteDay()" class="danger">Delete This Day</button>
+    </div>
+    <div class="card">
+      <h2>⚠️ Reset Everything</h2>
+      <p style="color:gray;font-size:13px;margin-bottom:16px">
+        Wipes all data. Cannot be undone.
+      </p>
+      <button onclick="resetAll()" class="danger">Reset Entire Challenge</button>
+    </div>
+  </div>
+
 </div>
-
-<h2>Uploaded Dates</h2>
-<ul id="uploadedDates"></ul>
-
-<h2>Daily Scoreboard</h2>
-<table id="dailyBoard">
-<thead>
-<tr>
-<th>Rank</th>
-<th>Name</th>
-<th>Steps</th>
-<th>Points</th>
-<th>Note</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
-<h2>Weekly Scoreboard</h2>
-<table id="weeklyBoard">
-<thead>
-<tr>
-<th>Rank</th>
-<th>Name</th>
-<th>Weekly Steps</th>
-<th>Points</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
-<h2>4 Week Championship</h2>
-<table id="monthBoard">
-<thead>
-<tr>
-<th>Rank</th>
-<th>Name</th>
-<th>Total Points</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
-<h2>Daily History (Filter by Date)</h2>
-
-<input type="date" id="historyDate">
-<button onclick="showHistory()">Show Data</button>
-
-<table id="historyTable">
-<thead>
-<tr>
-<th>Name</th>
-<th>Total Steps</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
-<h2>28 Day Walking Chart</h2>
-
-<select id="personSelect"></select>
-<button onclick="generateChart()">Show Chart</button>
-
-<canvas id="stepChart"></canvas>
-
-<h2>28 Day Total Steps</h2>
-
-<table id="totalStepsTable">
-<thead>
-<tr>
-<th>Name</th>
-<th>Total Steps (28 Days)</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
 
 <script src="script.js"></script>
-
 </body>
 </html>
