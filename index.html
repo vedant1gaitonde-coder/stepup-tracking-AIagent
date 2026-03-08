@@ -26,9 +26,10 @@
     <!-- LOGIN FORM -->
     <div id="loginForm">
       <input type="text" id="loginGroup" placeholder="Group Name" />
-      <input type="password" id="loginPassword" placeholder="Password" />
+      <input type="password" id="loginPassword" placeholder="Password (leave empty to view only)" />
       <p id="loginError" class="error-msg"></p>
       <button onclick="login()">Login</button>
+      <p style="color:gray;font-size:12px;margin-top:8px">💡 Leave password empty to enter as viewer</p>
     </div>
 
     <!-- SIGNUP FORM -->
@@ -56,14 +57,14 @@
 
   <!-- NAV BAR -->
   <div class="nav-bar">
-    <div class="nav-link" onclick="showTab('upload')">📤 Upload</div>
+    <div class="nav-link" id="navUpload" onclick="showTab('upload')">📤 Upload</div>
     <div class="nav-link" onclick="showTab('daily')">📅 Daily</div>
     <div class="nav-link" onclick="showTab('weekly')">📊 Weekly</div>
     <div class="nav-link" onclick="showTab('championship')">🏆 Championship</div>
     <div class="nav-link" onclick="showTab('penalties')">😂 Penalties</div>
     <div class="nav-link" onclick="showTab('history')">🕓 History</div>
     <div class="nav-link" onclick="showTab('chart')">📈 Chart</div>
-    <div class="nav-link" onclick="showTab('manage')">⚙️ Manage</div>
+    <div class="nav-link" id="navManage" onclick="showTab('manage')">⚙️ Manage</div>
   </div>
 
   <!-- TAB: UPLOAD -->
