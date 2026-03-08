@@ -13,6 +13,7 @@ const db = firebase.firestore();
 
 let currentGroup = null
 let chart = null
+let isAdmin = false
 
 // ─── AUTH ─────────────────────────────────────────────
 
@@ -43,25 +44,20 @@ async function signup() {
   }
 
   try {
-    // Check if group already exists
     const snap = await db.collection('groups').doc(group).get()
     if (snap.exists) {
       err.innerText = 'Group name already taken. Choose another.'
       return
     }
-
-    // Create group
     await db.collection('groups').doc(group).set({
       password: password,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       challengeStart: null,
       progress: 0
     })
-
     err.style.color = 'green'
     err.innerText = '✅ Group created! Please login.'
     setTimeout(() => switchAuth('login'), 1500)
-
   } catch (e) {
     err.innerText = 'Error: ' + e.message
   }
@@ -72,8 +68,8 @@ async function login() {
   const password = document.getElementById('loginPassword').value.trim()
   const err = document.getElementById('loginError')
 
-  if (!group || !password) {
-    err.innerText = 'Please fill all fields'
+  if (!group) {
+    err.innerText = 'Please enter group name'
     return
   }
 
@@ -83,14 +79,27 @@ async function login() {
       err.innerText = 'Group not found'
       return
     }
+
+    if (password === '') {
+      // Viewer mode — no password needed
+      currentGroup = group
+      isAdmin = false
+      sessionStorage.setItem('group', group)
+      sessionStorage.setItem('isAdmin', 'false')
+      showApp()
+      return
+    }
+
     if (snap.data().password !== password) {
       err.innerText = 'Wrong password'
       return
     }
 
-    // Login success
+    // Admin mode
     currentGroup = group
+    isAdmin = true
     sessionStorage.setItem('group', group)
+    sessionStorage.setItem('isAdmin', 'true')
     showApp()
 
   } catch (e) {
@@ -100,7 +109,9 @@ async function login() {
 
 function logout() {
   sessionStorage.removeItem('group')
+  sessionStorage.removeItem('isAdmin')
   currentGroup = null
+  isAdmin = false
   document.getElementById('mainApp').style.display = 'none'
   document.getElementById('authPage').style.display = 'flex'
 }
@@ -108,9 +119,16 @@ function logout() {
 function showApp() {
   document.getElementById('authPage').style.display = 'none'
   document.getElementById('mainApp').style.display = 'block'
-  document.getElementById('groupLabel').innerText = '👥 ' + currentGroup
+  document.getElementById('groupLabel').innerText = isAdmin
+    ? '👑 ' + currentGroup
+    : '👁️ ' + currentGroup + ' (Viewer)'
+
+  // Hide admin-only tabs for viewers
+  document.getElementById('navUpload').style.display = isAdmin ? 'block' : 'none'
+  document.getElementById('navManage').style.display = isAdmin ? 'block' : 'none'
+
   loadAllData()
-  showTab('upload')
+  showTab(isAdmin ? 'upload' : 'daily')
 }
 
 // ─── LOAD ALL DATA ────────────────────────────────────
@@ -118,14 +136,11 @@ function showApp() {
 async function loadAllData() {
   const snap = await db.collection('groups').doc(currentGroup).get()
   const data = snap.data()
-
-  // Update progress
   const progress = data.progress || 0
   document.getElementById('progressText').innerText =
     'Challenge Progress: ' + progress + ' / 28 Days Completed'
   document.getElementById('progressBar').style.width =
     Math.round((progress / 28) * 100) + '%'
-
   renderUploadedDates()
   renderWeekly()
   renderMonth()
@@ -144,12 +159,18 @@ function showTab(tabId) {
     l.classList.remove('active')
   })
   document.getElementById(tabId).style.display = 'block'
-  document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active')
+  const navEl = document.querySelector(`[onclick="showTab('${tabId}')"]`)
+  if (navEl) navEl.classList.add('active')
 }
 
 // ─── UPLOAD ───────────────────────────────────────────
 
 function runAgent() {
+  if (!isAdmin) {
+    alert('You are in viewer mode. Login with password to edit.')
+    return
+  }
+
   const file = document.getElementById('fileInput').files[0]
   const date = document.getElementById('dateInput').value
 
@@ -165,7 +186,6 @@ function runAgent() {
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet)
 
-    // Check if date already exists
     const existing = await db
       .collection('groups').doc(currentGroup)
       .collection('history').doc(date).get()
@@ -186,11 +206,9 @@ async function processRows(rows, date) {
   const historyEntries = []
   const penalties = []
 
-  // Get current group data
   const groupSnap = await db.collection('groups').doc(currentGroup).get()
   const groupData = groupSnap.data()
 
-  // Get all member points
   const membersSnap = await db
     .collection('groups').doc(currentGroup)
     .collection('members').get()
@@ -240,7 +258,6 @@ async function processRows(rows, date) {
     daily.push({ name, steps, points: pts, note })
   }
 
-  // Update challenge start and progress
   let challengeStart = groupData.challengeStart
   if (!challengeStart) {
     challengeStart = date
@@ -252,7 +269,6 @@ async function processRows(rows, date) {
   if (diff < 0) diff = 0
   if (diff > 28) diff = 28
 
-  // Check if 28 days completed — reset
   if (diff >= 28) {
     if (confirm('28 day challenge complete! Start new challenge?')) {
       challengeStart = date
@@ -263,29 +279,24 @@ async function processRows(rows, date) {
     }
   }
 
-  // Save everything to Firestore
   const batch = db.batch()
 
-  // Save history for this date
   const histRef = db.collection('groups').doc(currentGroup)
     .collection('history').doc(date)
   batch.set(histRef, { entries: historyEntries, date })
 
-  // Save member points
   for (let name in membersMap) {
     const memRef = db.collection('groups').doc(currentGroup)
       .collection('members').doc(name)
     batch.set(memRef, membersMap[name])
   }
 
-  // Save penalties
   for (const p of penalties) {
     const penRef = db.collection('groups').doc(currentGroup)
       .collection('penalties').doc(`${date}_${p.name}`)
     batch.set(penRef, p)
   }
 
-  // Update group progress
   const groupRef = db.collection('groups').doc(currentGroup)
   batch.update(groupRef, {
     progress: diff,
@@ -294,7 +305,6 @@ async function processRows(rows, date) {
 
   await batch.commit()
 
-  // Render daily
   renderDaily(daily)
   await loadAllData()
   showTab('daily')
@@ -342,6 +352,11 @@ async function reverseOldData(date) {
 // ─── DELETE DAY ───────────────────────────────────────
 
 async function deleteDay() {
+  if (!isAdmin) {
+    alert('You are in viewer mode. Login with password to edit.')
+    return
+  }
+
   const date = document.getElementById('deleteDateInput').value
   if (!date) {
     alert('Select a date to delete')
@@ -362,7 +377,6 @@ async function deleteDay() {
   await db.collection('groups').doc(currentGroup)
     .collection('history').doc(date).delete()
 
-  // Delete penalties for this date
   const penSnap = await db.collection('groups').doc(currentGroup)
     .collection('penalties')
     .where('date', '==', date).get()
@@ -454,7 +468,6 @@ async function renderMonth() {
   const membersSnap = await db.collection('groups').doc(currentGroup)
     .collection('members').get()
 
-  // Get total steps for each member from history
   const historySnap = await db.collection('groups').doc(currentGroup)
     .collection('history').get()
 
@@ -522,7 +535,7 @@ async function renderPenalties() {
   const body = document.querySelector('#penaltyTable tbody')
   body.innerHTML = ''
   if (snap.empty) {
-    body.innerHTML = `<tr><td colspan="5" style="color:gray">No penalties yet 🎉</td></tr>`
+    body.innerHTML = `<tr><td colspan="4" style="color:gray">No penalties yet 🎉</td></tr>`
     return
   }
   snap.forEach(doc => {
@@ -614,9 +627,13 @@ async function generateChart() {
 }
 
 async function resetAll() {
+  if (!isAdmin) {
+    alert('You are in viewer mode. Login with password to edit.')
+    return
+  }
+
   if (!confirm('Reset entire challenge? This cannot be undone.')) return
 
-  // Delete all subcollections
   const collections = ['history', 'members', 'penalties']
   for (const col of collections) {
     const snap = await db.collection('groups').doc(currentGroup)
@@ -641,6 +658,7 @@ window.onload = function() {
   const saved = sessionStorage.getItem('group')
   if (saved) {
     currentGroup = saved
+    isAdmin = sessionStorage.getItem('isAdmin') === 'true'
     showApp()
   }
 }
