@@ -17,11 +17,13 @@
     <h1>🏃 Family Step Challenge</h1>
     <p class="login-subtitle">Track your family's walking challenge</p>
 
+    <!-- TABS -->
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="switchAuth('login')">Login</button>
       <button class="auth-tab" onclick="switchAuth('signup')">Sign Up</button>
     </div>
 
+    <!-- LOGIN FORM -->
     <div id="loginForm">
       <input type="text" id="loginGroup" placeholder="Group Name" />
       <input type="password" id="loginPassword" placeholder="Password (leave empty to view only)" />
@@ -30,6 +32,7 @@
       <p style="color:gray;font-size:12px;margin-top:8px">💡 Leave password empty to enter as viewer</p>
     </div>
 
+    <!-- SIGNUP FORM -->
     <div id="signupForm" style="display:none">
       <input type="text" id="signupGroup" placeholder="Choose Group Name" />
       <input type="password" id="signupPassword" placeholder="Choose Password" />
@@ -37,6 +40,7 @@
       <p id="signupError" class="error-msg"></p>
       <button onclick="signup()">Create Group</button>
     </div>
+
   </div>
 </div>
 
@@ -51,6 +55,7 @@
     </div>
   </div>
 
+  <!-- NAV BAR -->
   <div class="nav-bar">
     <div class="nav-link" id="navUpload" onclick="showTab('upload')">📤 Upload</div>
     <div class="nav-link" onclick="showTab('daily')">📅 Daily</div>
@@ -59,6 +64,8 @@
     <div class="nav-link" onclick="showTab('penalties')">😂 Penalties</div>
     <div class="nav-link" onclick="showTab('history')">🕓 History</div>
     <div class="nav-link" onclick="showTab('chart')">📈 Chart</div>
+    <div class="nav-link" onclick="showTab('winners')">🥇 Winners</div>
+    <div class="nav-link" onclick="showTab('halloffame')">👑 Hall of Fame</div>
     <div class="nav-link" id="navManage" onclick="showTab('manage')">⚙️ Manage</div>
   </div>
 
@@ -90,7 +97,11 @@
     <div class="card">
       <h2>📅 Daily Scoreboard</h2>
       <table id="dailyBoard">
-        <thead><tr><th>Rank</th><th>Name</th><th>Steps</th><th>Points</th><th>Note</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Rank</th><th>Name</th><th>Steps</th><th>Points</th><th>Note</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -101,7 +112,11 @@
     <div class="card">
       <h2>📊 Weekly Scoreboard</h2>
       <table id="weeklyBoard">
-        <thead><tr><th>Rank</th><th>Name</th><th>Weekly Steps</th><th>Total Points</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Rank</th><th>Name</th><th>Weekly Steps</th><th>Total Points</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -109,55 +124,28 @@
 
   <!-- TAB: CHAMPIONSHIP -->
   <div class="tab-content" id="championship">
-
-    <!-- OVERALL STANDINGS -->
     <div class="card">
-      <h2>🏆 4 Week Championship — Overall Standings</h2>
+      <h2>🏆 4 Week Championship</h2>
       <table id="monthBoard">
-        <thead><tr><th>Rank</th><th>Name</th><th>Total Points</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Rank</th><th>Name</th><th>Total Points</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
-
-    <!-- 28-DAY TOTAL STEPS -->
     <div class="card">
       <h2>👟 28 Day Total Steps</h2>
       <table id="totalStepsTable">
-        <thead><tr><th>Name</th><th>Total Steps (28 Days)</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Name</th><th>Total Steps (28 Days)</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
-
-    <!-- PER-DAY BREAKDOWN -->
-    <div class="card">
-      <h2>📅 Day-by-Day Standings</h2>
-      <p style="color:gray;font-size:13px;margin-bottom:14px">
-        Click any date to see standings for that specific day.
-      </p>
-
-      <!-- Date pills -->
-      <div id="championshipDatePills" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
-        <span style="color:gray;font-size:13px" id="championshipNoDates">No dates uploaded yet.</span>
-      </div>
-
-      <!-- Selected day results -->
-      <div id="championshipDaySection" style="display:none">
-        <p id="championshipDayLabel" style="font-weight:bold;color:#1a1a2e;font-size:16px;margin-bottom:14px;border-left:4px solid #4ade80;padding-left:10px"></p>
-
-        <h3 style="font-size:14px;color:#16213e;margin-bottom:8px">🏅 Points Earned On This Day</h3>
-        <table id="championshipDayBoard">
-          <thead><tr><th>Rank</th><th>Name</th><th>Steps</th><th>Points</th><th>Note</th></tr></thead>
-          <tbody></tbody>
-        </table>
-
-        <h3 style="font-size:14px;color:#16213e;margin:20px 0 8px">📊 Cumulative Standings Up To This Day</h3>
-        <table id="championshipCumulativeBoard">
-          <thead><tr><th>Rank</th><th>Name</th><th>Total Steps</th><th>Total Points</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-
   </div>
 
   <!-- TAB: PENALTIES -->
@@ -168,7 +156,11 @@
         Anyone crossing 20,000 steps loses 2 points and must complete a fun penalty!
       </p>
       <table id="penaltyTable">
-        <thead><tr><th>Date</th><th>Name</th><th>Steps</th><th>Penalty</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Date</th><th>Name</th><th>Steps</th><th>Penalty</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -182,7 +174,11 @@
       <button onclick="showHistory()">Show Data</button>
       <p id="historyDayLabel" style="margin-top:12px;font-weight:bold;color:#1a1a2e"></p>
       <table id="historyTable">
-        <thead><tr><th>Name</th><th>Steps</th><th>Points</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Name</th><th>Steps</th><th>Points</th>
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -198,17 +194,63 @@
     </div>
   </div>
 
+  <!-- TAB: WINNERS -->
+  <div class="tab-content" id="winners">
+    <div class="card">
+      <h2>🥇 Monthly Challenge Winners</h2>
+      <p style="color:gray;font-size:13px;margin-bottom:16px">
+        The champion crowned at the end of each 28-day challenge.
+      </p>
+      <table id="winnersTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Challenge Period</th>
+            <th>🏆 Winner</th>
+            <th>Points</th>
+            <th>Full Standings</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: HALL OF FAME -->
+  <div class="tab-content" id="halloffame">
+    <div class="card">
+      <h2>👑 Hall of Fame</h2>
+      <p style="color:gray;font-size:13px;margin-bottom:16px">
+        Total championships won by each participant across all 28-day challenges.
+      </p>
+      <table id="hallOfFameTable">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Name</th>
+            <th>🏆 Championships Won</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- TAB: MANAGE -->
   <div class="tab-content" id="manage">
     <div class="card">
       <h2>🗑️ Delete a Single Day</h2>
-      <p style="color:gray;font-size:13px;margin-bottom:16px">Points will be reversed automatically.</p>
+      <p style="color:gray;font-size:13px;margin-bottom:16px">
+        Points will be reversed automatically.
+      </p>
       <input type="date" id="deleteDateInput">
       <button onclick="deleteDay()" class="danger">Delete This Day</button>
     </div>
     <div class="card">
       <h2>⚠️ Reset Everything</h2>
-      <p style="color:gray;font-size:13px;margin-bottom:16px">Wipes all data. Cannot be undone.</p>
+      <p style="color:gray;font-size:13px;margin-bottom:16px">
+        Wipes all data. Cannot be undone.
+      </p>
       <button onclick="resetAll()" class="danger">Reset Entire Challenge</button>
     </div>
   </div>

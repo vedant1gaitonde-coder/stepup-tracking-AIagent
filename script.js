@@ -30,21 +30,37 @@ async function signup() {
   const confirm = document.getElementById('signupConfirm').value.trim()
   const err = document.getElementById('signupError')
 
-  if (!group || !password || !confirm) { err.innerText = 'Please fill all fields'; return }
-  if (password !== confirm) { err.innerText = 'Passwords do not match'; return }
-  if (password.length < 4) { err.innerText = 'Password must be at least 4 characters'; return }
+  if (!group || !password || !confirm) {
+    err.innerText = 'Please fill all fields'
+    return
+  }
+  if (password !== confirm) {
+    err.innerText = 'Passwords do not match'
+    return
+  }
+  if (password.length < 4) {
+    err.innerText = 'Password must be at least 4 characters'
+    return
+  }
 
   try {
     const snap = await db.collection('groups').doc(group).get()
-    if (snap.exists) { err.innerText = 'Group name already taken. Choose another.'; return }
+    if (snap.exists) {
+      err.innerText = 'Group name already taken. Choose another.'
+      return
+    }
     await db.collection('groups').doc(group).set({
-      password, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      challengeStart: null, progress: 0
+      password: password,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      challengeStart: null,
+      progress: 0
     })
     err.style.color = 'green'
     err.innerText = '✅ Group created! Please login.'
     setTimeout(() => switchAuth('login'), 1500)
-  } catch (e) { err.innerText = 'Error: ' + e.message }
+  } catch (e) {
+    err.innerText = 'Error: ' + e.message
+  }
 }
 
 async function login() {
@@ -52,32 +68,50 @@ async function login() {
   const password = document.getElementById('loginPassword').value.trim()
   const err = document.getElementById('loginError')
 
-  if (!group) { err.innerText = 'Please enter group name'; return }
+  if (!group) {
+    err.innerText = 'Please enter group name'
+    return
+  }
 
   try {
     const snap = await db.collection('groups').doc(group).get()
-    if (!snap.exists) { err.innerText = 'Group not found'; return }
-
-    if (password === '') {
-      currentGroup = group; isAdmin = false
-      sessionStorage.setItem('group', group)
-      sessionStorage.setItem('isAdmin', 'false')
-      showApp(); return
+    if (!snap.exists) {
+      err.innerText = 'Group not found'
+      return
     }
 
-    if (snap.data().password !== password) { err.innerText = 'Wrong password'; return }
+    if (password === '') {
+      // Viewer mode — no password needed
+      currentGroup = group
+      isAdmin = false
+      sessionStorage.setItem('group', group)
+      sessionStorage.setItem('isAdmin', 'false')
+      showApp()
+      return
+    }
 
-    currentGroup = group; isAdmin = true
+    if (snap.data().password !== password) {
+      err.innerText = 'Wrong password'
+      return
+    }
+
+    // Admin mode
+    currentGroup = group
+    isAdmin = true
     sessionStorage.setItem('group', group)
     sessionStorage.setItem('isAdmin', 'true')
     showApp()
-  } catch (e) { err.innerText = 'Error: ' + e.message }
+
+  } catch (e) {
+    err.innerText = 'Error: ' + e.message
+  }
 }
 
 function logout() {
   sessionStorage.removeItem('group')
   sessionStorage.removeItem('isAdmin')
-  currentGroup = null; isAdmin = false
+  currentGroup = null
+  isAdmin = false
   document.getElementById('mainApp').style.display = 'none'
   document.getElementById('authPage').style.display = 'flex'
 }
@@ -89,6 +123,7 @@ function showApp() {
     ? '👑 ' + currentGroup
     : '👁️ ' + currentGroup + ' (Viewer)'
 
+  // Hide admin-only tabs for viewers
   document.getElementById('navUpload').style.display = isAdmin ? 'block' : 'none'
   document.getElementById('navManage').style.display = isAdmin ? 'block' : 'none'
 
@@ -101,19 +136,34 @@ async function autoLoadYesterday() {
   const yesterday = new Date()
   yesterday.setDate(yesterday.getDate() - 1)
   const dateStr = yesterday.toISOString().split('T')[0]
+
   const snap = await db.collection('groups').doc(currentGroup)
     .collection('history').doc(dateStr).get()
+
   if (!snap.exists) return
+
   const day = yesterday.getDay()
   const data = []
+
   snap.data().entries.forEach(p => {
-    let pts = 0, note = ''
-    if (p.steps > 20000) { pts = 8; note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)' }
-    else if (day === 0 && p.steps < 7000) { pts = 10; note = '😴 Lazy Sunday rule (+10 pts)' }
-    else if (day === 0 && p.steps >= 7000) { pts = 8; note = '🌞 Sunday walker! (10pts - 2pts = 8pts)' }
-    else if (day !== 0 && p.steps >= 10000) { pts = 10; note = '🎯 10K Sweet Spot (+10 pts)' }
+    let pts = 0
+    let note = ''
+    if (p.steps > 20000) {
+      pts = 8
+      note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
+    } else if (day === 0 && p.steps < 7000) {
+      pts = 10
+      note = '😴 Lazy Sunday rule (+10 pts)'
+    } else if (day === 0 && p.steps >= 7000) {
+      pts = 8
+      note = '🌞 Sunday walker! (10pts - 2pts = 8pts)'
+    } else if (day !== 0 && p.steps >= 10000) {
+      pts = 10
+      note = '🎯 10K Sweet Spot (+10 pts)'
+    }
     data.push({ name: p.name, steps: p.steps, points: pts, note })
   })
+
   renderDaily(data)
 }
 
@@ -133,14 +183,19 @@ async function loadAllData() {
   renderTotalSteps()
   renderPenalties()
   populatePersonSelect()
-  renderChampionshipDatePills()
+  renderWinners()
+  renderHallOfFame()
 }
 
 // ─── TAB SYSTEM ───────────────────────────────────────
 
 function showTab(tabId) {
-  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none')
-  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'))
+  document.querySelectorAll('.tab-content').forEach(t => {
+    t.style.display = 'none'
+  })
+  document.querySelectorAll('.nav-link').forEach(l => {
+    l.classList.remove('active')
+  })
   document.getElementById(tabId).style.display = 'block'
   const navEl = document.querySelector(`[onclick="showTab('${tabId}')"]`)
   if (navEl) navEl.classList.add('active')
@@ -149,22 +204,35 @@ function showTab(tabId) {
 // ─── UPLOAD ───────────────────────────────────────────
 
 function runAgent() {
-  if (!isAdmin) { alert('You are in viewer mode. Login with password to edit.'); return }
+  if (!isAdmin) {
+    alert('You are in viewer mode. Login with password to edit.')
+    return
+  }
+
   const file = document.getElementById('fileInput').files[0]
   const date = document.getElementById('dateInput').value
-  if (!file || !date) { alert('Upload file and select date'); return }
+
+  if (!file || !date) {
+    alert('Upload file and select date')
+    return
+  }
+
   const reader = new FileReader()
   reader.onload = async function(e) {
     const data = new Uint8Array(e.target.result)
     const workbook = XLSX.read(data, { type: 'array' })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet)
-    const existing = await db.collection('groups').doc(currentGroup)
+
+    const existing = await db
+      .collection('groups').doc(currentGroup)
       .collection('history').doc(date).get()
+
     if (existing.exists) {
       if (!confirm(`Data for ${date} already exists. Overwrite it?`)) return
       await reverseOldData(date)
     }
+
     await processRows(rows, date)
   }
   reader.readAsArrayBuffer(file)
@@ -172,37 +240,67 @@ function runAgent() {
 
 async function processRows(rows, date) {
   const day = new Date(date).getDay()
-  const daily = [], historyEntries = [], penalties = []
+  const daily = []
+  const historyEntries = []
+  const penalties = []
+
   const groupSnap = await db.collection('groups').doc(currentGroup).get()
   const groupData = groupSnap.data()
-  const membersSnap = await db.collection('groups').doc(currentGroup).collection('members').get()
+
+  const membersSnap = await db
+    .collection('groups').doc(currentGroup)
+    .collection('members').get()
+
   let membersMap = {}
-  membersSnap.forEach(doc => { membersMap[doc.id] = doc.data() })
+  membersSnap.forEach(doc => {
+    membersMap[doc.id] = doc.data()
+  })
 
   for (const r of rows) {
     const name = r['Name']
     const steps = Number(r['Total Steps'])
-    if (!membersMap[name]) membersMap[name] = { points: 0, weekly: 0 }
-    let pts = 0, note = ''
+
+    if (!membersMap[name]) {
+      membersMap[name] = { points: 0, weekly: 0 }
+    }
+
+    let pts = 0
+    let note = ''
+
     if (steps > 20000) {
-      pts = 8; note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
+      pts = 8
+      note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
       penalties.push({ name, steps, date })
-    } else if (day === 0 && steps < 7000) { pts = 10; note = '😴 Lazy Sunday rule (+10 pts)' }
-    else if (day === 0 && steps >= 7000) { pts = 8; note = '🌞 Sunday walker! (10pts - 2pts = 8pts)' }
-    else if (day !== 0 && steps >= 10000) { pts = 10; note = '🎯 10K Sweet Spot (+10 pts)' }
+    } else if (day === 0 && steps < 7000) {
+      pts = 10
+      note = '😴 Lazy Sunday rule (+10 pts)'
+    } else if (day === 0 && steps >= 7000) {
+      pts = 8
+      note = '🌞 Sunday walker! (10pts - 2pts = 8pts)'
+    } else if (day !== 0 && steps >= 10000) {
+      pts = 10
+      note = '🎯 10K Sweet Spot (+10 pts)'
+    }
+
     membersMap[name].weekly += steps
+
     if (membersMap[name].weekly >= 70000) {
       membersMap[name].points += 10
       membersMap[name].weekly = 0
       note += ' 👑 Consistency Bonus! (+10 pts)'
     }
+
     membersMap[name].points += pts
+
     historyEntries.push({ name, steps })
     daily.push({ name, steps, points: pts, note })
   }
 
   let challengeStart = groupData.challengeStart
-  if (!challengeStart) challengeStart = date
+  if (!challengeStart) {
+    challengeStart = date
+  }
+
   const start = new Date(challengeStart)
   const now = new Date(date)
   let diff = Math.floor((now - start) / (1000 * 60 * 60 * 24)) + 1
@@ -211,29 +309,42 @@ async function processRows(rows, date) {
 
   if (diff >= 28) {
     if (confirm('28 day challenge complete! Start new challenge?')) {
-      challengeStart = date; diff = 1
-      for (let name in membersMap) membersMap[name] = { points: 0, weekly: 0 }
+
+      // ── Save the champion before resetting ──
+      await saveChampion(membersMap, challengeStart, date)
+
+      challengeStart = date
+      diff = 1
+      for (let name in membersMap) {
+        membersMap[name] = { points: 0, weekly: 0 }
+      }
     }
   }
 
   const batch = db.batch()
-  batch.set(
-    db.collection('groups').doc(currentGroup).collection('history').doc(date),
-    { entries: historyEntries, date }
-  )
+
+  const histRef = db.collection('groups').doc(currentGroup)
+    .collection('history').doc(date)
+  batch.set(histRef, { entries: historyEntries, date })
+
   for (let name in membersMap) {
-    batch.set(
-      db.collection('groups').doc(currentGroup).collection('members').doc(name),
-      membersMap[name]
-    )
+    const memRef = db.collection('groups').doc(currentGroup)
+      .collection('members').doc(name)
+    batch.set(memRef, membersMap[name])
   }
+
   for (const p of penalties) {
-    batch.set(
-      db.collection('groups').doc(currentGroup).collection('penalties').doc(`${date}_${p.name}`),
-      p
-    )
+    const penRef = db.collection('groups').doc(currentGroup)
+      .collection('penalties').doc(`${date}_${p.name}`)
+    batch.set(penRef, p)
   }
-  batch.update(db.collection('groups').doc(currentGroup), { progress: diff, challengeStart })
+
+  const groupRef = db.collection('groups').doc(currentGroup)
+  batch.update(groupRef, {
+    progress: diff,
+    challengeStart: challengeStart
+  })
+
   await batch.commit()
 
   renderDaily(daily)
@@ -246,13 +357,20 @@ async function reverseOldData(date) {
   const snap = await db.collection('groups').doc(currentGroup)
     .collection('history').doc(date).get()
   if (!snap.exists) return
+
   const day = new Date(date).getDay()
   const entries = snap.data().entries
-  const membersSnap = await db.collection('groups').doc(currentGroup).collection('members').get()
+
+  const membersSnap = await db.collection('groups').doc(currentGroup)
+    .collection('members').get()
   let membersMap = {}
-  membersSnap.forEach(doc => { membersMap[doc.id] = doc.data() })
+  membersSnap.forEach(doc => {
+    membersMap[doc.id] = doc.data()
+  })
+
   for (const p of entries) {
-    const name = p.name; const steps = Number(p.steps)
+    const name = p.name
+    const steps = Number(p.steps)
     if (!membersMap[name]) continue
     let pts = 0
     if (steps > 20000) pts = 8
@@ -263,9 +381,12 @@ async function reverseOldData(date) {
     membersMap[name].weekly -= steps
     if (membersMap[name].weekly < 0) membersMap[name].weekly = 0
   }
+
   const batch = db.batch()
   for (let name in membersMap) {
-    batch.set(db.collection('groups').doc(currentGroup).collection('members').doc(name), membersMap[name])
+    const memRef = db.collection('groups').doc(currentGroup)
+      .collection('members').doc(name)
+    batch.set(memRef, membersMap[name])
   }
   await batch.commit()
 }
@@ -273,22 +394,45 @@ async function reverseOldData(date) {
 // ─── DELETE DAY ───────────────────────────────────────
 
 async function deleteDay() {
-  if (!isAdmin) { alert('You are in viewer mode. Login with password to edit.'); return }
+  if (!isAdmin) {
+    alert('You are in viewer mode. Login with password to edit.')
+    return
+  }
+
   const date = document.getElementById('deleteDateInput').value
-  if (!date) { alert('Select a date to delete'); return }
-  const snap = await db.collection('groups').doc(currentGroup).collection('history').doc(date).get()
-  if (!snap.exists) { alert('No data found for ' + date); return }
+  if (!date) {
+    alert('Select a date to delete')
+    return
+  }
+
+  const snap = await db.collection('groups').doc(currentGroup)
+    .collection('history').doc(date).get()
+  if (!snap.exists) {
+    alert('No data found for ' + date)
+    return
+  }
+
   if (!confirm(`Delete data for ${date}? Points will be reversed.`)) return
+
   await reverseOldData(date)
-  await db.collection('groups').doc(currentGroup).collection('history').doc(date).delete()
+
+  await db.collection('groups').doc(currentGroup)
+    .collection('history').doc(date).delete()
+
   const penSnap = await db.collection('groups').doc(currentGroup)
-    .collection('penalties').where('date', '==', date).get()
+    .collection('penalties')
+    .where('date', '==', date).get()
   const batch = db.batch()
   penSnap.forEach(doc => batch.delete(doc.ref))
   await batch.commit()
+
+  // Recalculate progress from remaining history
   const remainingSnap = await db.collection('groups').doc(currentGroup)
     .collection('history').orderBy('date').get()
-  let newProgress = 0, newChallengeStart = null
+
+  let newProgress = 0
+  let newChallengeStart = null
+
   if (!remainingSnap.empty) {
     const dates = []
     remainingSnap.forEach(doc => dates.push(doc.id))
@@ -298,139 +442,119 @@ async function deleteDay() {
     newProgress = Math.floor((last - start) / (1000 * 60 * 60 * 24)) + 1
     if (newProgress > 28) newProgress = 28
   }
-  await db.collection('groups').doc(currentGroup).update({ progress: newProgress, challengeStart: newChallengeStart })
+
+  await db.collection('groups').doc(currentGroup).update({
+    progress: newProgress,
+    challengeStart: newChallengeStart
+  })
+
   await loadAllData()
   alert(`✅ Data for ${date} deleted!`)
 }
 
-// ─── CHAMPIONSHIP DATE PILLS ──────────────────────────
+// ─── SAVE CHAMPION ────────────────────────────────────
 
-async function renderChampionshipDatePills() {
+// Called when a 28-day challenge ends and the user confirms a new challenge.
+// Saves the full final standings plus the winner to the 'champions' subcollection.
+async function saveChampion(membersMap, challengeStart, challengeEnd) {
+  // Build sorted standings array from membersMap
+  const standings = Object.keys(membersMap)
+    .map(name => ({ name, points: membersMap[name].points || 0 }))
+    .sort((a, b) => b.points - a.points)
+
+  if (standings.length === 0) return
+
+  const winner = standings[0]
+
+  // Document ID = challengeStart date so it's unique and chronological
+  const docId = challengeStart
+
+  await db.collection('groups').doc(currentGroup)
+    .collection('champions').doc(docId).set({
+      challengeStart,
+      challengeEnd,
+      winnerName: winner.name,
+      winnerPoints: winner.points,
+      standings,          // full ranked list saved for display
+      savedAt: firebase.firestore.FieldValue.serverTimestamp()
+    })
+}
+
+// ─── RENDER WINNERS ───────────────────────────────────
+
+async function renderWinners() {
   const snap = await db.collection('groups').doc(currentGroup)
-    .collection('history').orderBy('date').get()
+    .collection('champions').orderBy('challengeStart').get()
 
-  const container = document.getElementById('championshipDatePills')
-  const noDateMsg = document.getElementById('championshipNoDates')
-  container.innerHTML = ''
+  const body = document.querySelector('#winnersTable tbody')
+  body.innerHTML = ''
 
   if (snap.empty) {
-    if (noDateMsg) noDateMsg.style.display = 'block'
+    body.innerHTML = `<tr><td colspan="5" style="color:gray;text-align:center">
+      No completed challenges yet. Winners will appear here after the first 28-day challenge ends.
+    </td></tr>`
     return
   }
-  if (noDateMsg) noDateMsg.style.display = 'none'
 
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  snap.forEach((doc, idx) => {
+    const d = doc.data()
+    const num = idx + 1
+
+    // Build mini standings list for the "Full Standings" column
+    const standingsList = (d.standings || [])
+      .map((p, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
+        return `${medal} ${p.name} (${p.points}pts)`
+      })
+      .join('<br>')
+
+    body.innerHTML += `
+      <tr style="${num === 1 ? '' : ''}">
+        <td><strong>#${num}</strong></td>
+        <td>${d.challengeStart} → ${d.challengeEnd}</td>
+        <td style="font-weight:bold;color:#16a34a;font-size:15px">🏆 ${d.winnerName}</td>
+        <td>${d.winnerPoints} pts</td>
+        <td style="text-align:left;font-size:12px;line-height:1.8">${standingsList}</td>
+      </tr>`
+  })
+}
+
+// ─── RENDER HALL OF FAME ──────────────────────────────
+
+async function renderHallOfFame() {
+  const snap = await db.collection('groups').doc(currentGroup)
+    .collection('champions').get()
+
+  // Count wins per person
+  const winsMap = {}
   snap.forEach(doc => {
-    const date = doc.id
-    const dow = dayNames[new Date(date).getDay()]
-    const pill = document.createElement('span')
-    pill.className = 'champ-date-pill'
-    pill.innerText = `${date} (${dow})`
-    pill.onclick = () => toggleChampionshipDay(date, pill)
-    container.appendChild(pill)
+    const winner = doc.data().winnerName
+    if (!winner) return
+    winsMap[winner] = (winsMap[winner] || 0) + 1
   })
-}
 
-// ── TOGGLE: click active pill again → close the table ──
-function toggleChampionshipDay(date, pillEl) {
-  const section = document.getElementById('championshipDaySection')
+  const body = document.querySelector('#hallOfFameTable tbody')
+  body.innerHTML = ''
 
-  // If this pill is already active, deactivate and hide
-  if (pillEl.classList.contains('active')) {
-    pillEl.classList.remove('active')
-    section.style.display = 'none'
-    document.getElementById('championshipDayLabel').innerText = ''
+  if (Object.keys(winsMap).length === 0) {
+    body.innerHTML = `<tr><td colspan="3" style="color:gray;text-align:center">
+      No champions yet. Complete a 28-day challenge to unlock the Hall of Fame!
+    </td></tr>`
     return
   }
 
-  // Otherwise show this day's data
-  showChampionshipDay(date, pillEl)
-}
+  const sorted = Object.entries(winsMap)
+    .sort((a, b) => b[1] - a[1])
 
-async function showChampionshipDay(date, pillEl) {
-  // Highlight selected pill, remove from all others
-  document.querySelectorAll('.champ-date-pill').forEach(p => p.classList.remove('active'))
-  if (pillEl) pillEl.classList.add('active')
-
-  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const dow = dayNames[new Date(date).getDay()]
-  document.getElementById('championshipDayLabel').innerText = `📅 ${date} — ${dow}`
-  document.getElementById('championshipDaySection').style.display = 'block'
-
-  // ── Single day scoreboard ──
-  const daySnap = await db.collection('groups').doc(currentGroup)
-    .collection('history').doc(date).get()
-  const dayBody = document.querySelector('#championshipDayBoard tbody')
-  dayBody.innerHTML = ''
-
-  if (!daySnap.exists) {
-    dayBody.innerHTML = `<tr><td colspan="5" style="color:gray">No data for this day.</td></tr>`
-  } else {
-    const day = new Date(date).getDay()
-    let entries = daySnap.data().entries.map(p => {
-      const steps = Number(p.steps)
-      let pts = 0, note = ''
-      if (steps > 20000) { pts = 8; note = '😂 Penalty: Over 20k (10-2=8pts)' }
-      else if (day === 0 && steps < 7000) { pts = 10; note = '😴 Lazy Sunday (+10 pts)' }
-      else if (day === 0 && steps >= 7000) { pts = 8; note = '🌞 Sunday walker! (10-2=8pts)' }
-      else if (day !== 0 && steps >= 10000) { pts = 10; note = '🎯 10K Sweet Spot (+10 pts)' }
-      return { name: p.name, steps, points: pts, note }
-    })
-    entries.sort((a, b) => b.steps - a.steps)
-    entries.forEach((p, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1
-      const color = p.points > 0 ? 'color:green' : ''
-      dayBody.innerHTML += `
-        <tr>
-          <td>${medal}</td>
-          <td>${p.name}</td>
-          <td>${Number(p.steps).toLocaleString()}</td>
-          <td style="${color}">${p.points > 0 ? '+' : ''}${p.points}</td>
-          <td>${p.note}</td>
-        </tr>`
-    })
-  }
-
-  // ── Cumulative standings up to this date ──
-  const allSnap = await db.collection('groups').doc(currentGroup)
-    .collection('history').orderBy('date').get()
-
-  const cumulPoints = {}, cumulSteps = {}, cumulWeekly = {}
-
-  allSnap.forEach(doc => {
-    if (doc.id > date) return
-    const d = new Date(doc.id).getDay()
-    ;(doc.data().entries || []).forEach(p => {
-      const name = p.name, steps = Number(p.steps)
-      if (!cumulPoints[name]) { cumulPoints[name] = 0; cumulSteps[name] = 0; cumulWeekly[name] = 0 }
-      let pts = 0
-      if (steps > 20000) pts = 8
-      else if (d === 0 && steps < 7000) pts = 10
-      else if (d === 0 && steps >= 7000) pts = 8
-      else if (d !== 0 && steps >= 10000) pts = 10
-      cumulWeekly[name] += steps
-      cumulSteps[name] += steps
-      if (cumulWeekly[name] >= 70000) { pts += 10; cumulWeekly[name] = 0 }
-      cumulPoints[name] += pts
-    })
-  })
-
-  const cumulArr = Object.keys(cumulPoints).map(name => ({
-    name, points: cumulPoints[name], totalSteps: cumulSteps[name]
-  }))
-  cumulArr.sort((a, b) => b.points - a.points || b.totalSteps - a.totalSteps)
-
-  const cumulBody = document.querySelector('#championshipCumulativeBoard tbody')
-  cumulBody.innerHTML = ''
-  cumulArr.forEach((p, i) => {
+  sorted.forEach(([name, wins], i) => {
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1
-    const trophy = i === 0 ? ' 🏆' : ''
-    cumulBody.innerHTML += `
-      <tr ${i === 0 ? 'style="background:#fff9c4"' : ''}>
+    const crown = wins >= 3 ? ' 👑' : wins >= 2 ? ' ⭐' : ''
+    const highlight = i === 0 ? 'style="background:#fff9c4"' : ''
+    body.innerHTML += `
+      <tr ${highlight}>
         <td>${medal}</td>
-        <td>${p.name}${trophy}</td>
-        <td>${p.totalSteps.toLocaleString()}</td>
-        <td>${p.points}</td>
+        <td style="font-weight:bold">${name}${crown}</td>
+        <td style="font-size:16px;font-weight:bold;color:#16a34a">${wins} 🏆</td>
       </tr>`
   })
 }
@@ -458,7 +582,8 @@ function renderDaily(data) {
     const color = p.points < 0 ? 'color:red' : p.points > 0 ? 'color:green' : ''
     body.innerHTML += `
       <tr>
-        <td>${medal}</td><td>${p.name}</td>
+        <td>${medal}</td>
+        <td>${p.name}</td>
         <td>${Number(p.steps).toLocaleString()}</td>
         <td style="${color}">${p.points > 0 ? '+' : ''}${p.points}</td>
         <td>${p.note}</td>
@@ -467,9 +592,12 @@ function renderDaily(data) {
 }
 
 async function renderWeekly() {
-  const snap = await db.collection('groups').doc(currentGroup).collection('members').get()
+  const snap = await db.collection('groups').doc(currentGroup)
+    .collection('members').get()
   let arr = []
-  snap.forEach(doc => arr.push({ name: doc.id, ...doc.data() }))
+  snap.forEach(doc => {
+    arr.push({ name: doc.id, ...doc.data() })
+  })
   arr.sort((a, b) => b.weekly - a.weekly)
   const body = document.querySelector('#weeklyBoard tbody')
   body.innerHTML = ''
@@ -477,7 +605,8 @@ async function renderWeekly() {
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1
     body.innerHTML += `
       <tr>
-        <td>${medal}</td><td>${p.name}</td>
+        <td>${medal}</td>
+        <td>${p.name}</td>
         <td>${Number(p.weekly || 0).toLocaleString()}</td>
         <td>${p.points || 0}</td>
       </tr>`
@@ -485,20 +614,32 @@ async function renderWeekly() {
 }
 
 async function renderMonth() {
-  const membersSnap = await db.collection('groups').doc(currentGroup).collection('members').get()
-  const historySnap = await db.collection('groups').doc(currentGroup).collection('history').get()
+  const membersSnap = await db.collection('groups').doc(currentGroup)
+    .collection('members').get()
+
+  const historySnap = await db.collection('groups').doc(currentGroup)
+    .collection('history').get()
+
   const totalStepsMap = {}
   historySnap.forEach(doc => {
-    ;(doc.data().entries || []).forEach(p => {
+    const entries = doc.data().entries || []
+    entries.forEach(p => {
       if (!totalStepsMap[p.name]) totalStepsMap[p.name] = 0
       totalStepsMap[p.name] += Number(p.steps)
     })
   })
+
   let arr = []
   membersSnap.forEach(doc => {
-    arr.push({ name: doc.id, points: doc.data().points || 0, totalSteps: totalStepsMap[doc.id] || 0 })
+    arr.push({
+      name: doc.id,
+      points: doc.data().points || 0,
+      totalSteps: totalStepsMap[doc.id] || 0
+    })
   })
+
   arr.sort((a, b) => b.points - a.points || b.totalSteps - a.totalSteps)
+
   const body = document.querySelector('#monthBoard tbody')
   body.innerHTML = ''
   arr.forEach((p, i) => {
@@ -506,25 +647,35 @@ async function renderMonth() {
     const trophy = i === 0 ? '🏆' : ''
     body.innerHTML += `
       <tr ${i === 0 ? 'style="background:#fff9c4"' : ''}>
-        <td>${medal}</td><td>${p.name} ${trophy}</td><td>${p.points}</td>
+        <td>${medal}</td>
+        <td>${p.name} ${trophy}</td>
+        <td>${p.points}</td>
       </tr>`
   })
 }
 
 async function renderTotalSteps() {
-  const snap = await db.collection('groups').doc(currentGroup).collection('history').get()
+  const snap = await db.collection('groups').doc(currentGroup)
+    .collection('history').get()
   const totals = {}
   snap.forEach(doc => {
-    ;(doc.data().entries || []).forEach(p => {
+    const entries = doc.data().entries || []
+    entries.forEach(p => {
       if (!totals[p.name]) totals[p.name] = 0
       totals[p.name] += Number(p.steps)
     })
   })
   const body = document.querySelector('#totalStepsTable tbody')
   body.innerHTML = ''
-  Object.entries(totals).sort((a, b) => b[1] - a[1]).forEach(([name, total]) => {
-    body.innerHTML += `<tr><td>${name}</td><td>${total.toLocaleString()}</td></tr>`
-  })
+  Object.entries(totals)
+    .sort((a, b) => b[1] - a[1])
+    .forEach(([name, total]) => {
+      body.innerHTML += `
+        <tr>
+          <td>${name}</td>
+          <td>${total.toLocaleString()}</td>
+        </tr>`
+    })
 }
 
 async function renderPenalties() {
@@ -540,7 +691,8 @@ async function renderPenalties() {
     const p = doc.data()
     body.innerHTML += `
       <tr>
-        <td>${p.date}</td><td>${p.name}</td>
+        <td>${p.date}</td>
+        <td>${p.name}</td>
         <td>${Number(p.steps).toLocaleString()}</td>
         <td>😂 Must complete penalty task!</td>
       </tr>`
@@ -548,27 +700,37 @@ async function renderPenalties() {
 }
 
 async function populatePersonSelect() {
-  const snap = await db.collection('groups').doc(currentGroup).collection('members').get()
+  const snap = await db.collection('groups').doc(currentGroup)
+    .collection('members').get()
   const select = document.getElementById('personSelect')
   select.innerHTML = ''
   snap.forEach(doc => {
     const opt = document.createElement('option')
-    opt.value = doc.id; opt.text = doc.id
+    opt.value = doc.id
+    opt.text = doc.id
     select.appendChild(opt)
   })
 }
 
 async function showHistory() {
   const date = document.getElementById('historyDate').value
-  if (!date) { alert('Select a date'); return }
-  const snap = await db.collection('groups').doc(currentGroup).collection('history').doc(date).get()
+  if (!date) {
+    alert('Select a date')
+    return
+  }
+  const snap = await db.collection('groups').doc(currentGroup)
+    .collection('history').doc(date).get()
   const body = document.querySelector('#historyTable tbody')
   body.innerHTML = ''
-  if (!snap.exists) { alert('No data for ' + date); return }
+  if (!snap.exists) {
+    alert('No data for ' + date)
+    return
+  }
   const day = new Date(date).getDay()
   const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day]
   document.getElementById('historyDayLabel').innerText = `${date} (${dayName})`
-  snap.data().entries.forEach(p => {
+  const entries = snap.data().entries
+  entries.forEach(p => {
     let pts = 0
     if (p.steps > 20000) pts = 8
     else if (day === 0 && p.steps < 7000) pts = 10
@@ -588,7 +750,8 @@ async function generateChart() {
   const person = document.getElementById('personSelect').value
   const snap = await db.collection('groups').doc(currentGroup)
     .collection('history').orderBy('date').get()
-  const labels = [], data = []
+  const labels = []
+  const data = []
   snap.forEach(doc => {
     labels.push(doc.id)
     const entry = (doc.data().entries || []).find(p => p.name === person)
@@ -600,25 +763,40 @@ async function generateChart() {
     data: {
       labels,
       datasets: [{
-        label: person + ' Daily Steps', data,
-        borderColor: 'green', backgroundColor: 'rgba(0,128,0,0.1)',
-        borderWidth: 2, fill: true, tension: 0.3
+        label: person + ' Daily Steps',
+        data,
+        borderColor: 'green',
+        backgroundColor: 'rgba(0,128,0,0.1)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.3
       }]
     }
   })
 }
 
 async function resetAll() {
-  if (!isAdmin) { alert('You are in viewer mode. Login with password to edit.'); return }
+  if (!isAdmin) {
+    alert('You are in viewer mode. Login with password to edit.')
+    return
+  }
+
   if (!confirm('Reset entire challenge? This cannot be undone.')) return
+
   const collections = ['history', 'members', 'penalties']
   for (const col of collections) {
-    const snap = await db.collection('groups').doc(currentGroup).collection(col).get()
+    const snap = await db.collection('groups').doc(currentGroup)
+      .collection(col).get()
     const batch = db.batch()
     snap.forEach(doc => batch.delete(doc.ref))
     await batch.commit()
   }
-  await db.collection('groups').doc(currentGroup).update({ progress: 0, challengeStart: null })
+
+  await db.collection('groups').doc(currentGroup).update({
+    progress: 0,
+    challengeStart: null
+  })
+
   await loadAllData()
   alert('✅ Challenge reset!')
 }

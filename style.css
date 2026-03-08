@@ -336,29 +336,15 @@ tr:hover {
   font-weight: bold;
 }
 
-/* ── CHAMPIONSHIP DATE PILLS ── */
-.champ-date-pill {
-  background: #e0f2fe;
-  color: #0369a1;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: bold;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.2s;
-  user-select: none;
+/* ── WINNERS TABLE — Full Standings column left-aligned ── */
+#winnersTable td:last-child {
+  text-align: left;
+  line-height: 1.8;
 }
 
-.champ-date-pill:hover {
-  background: #bae6fd;
-  border-color: #0369a1;
-}
-
-.champ-date-pill.active {
-  background: #1a1a2e;
-  color: #4ade80;
-  border-color: #4ade80;
+/* ── HALL OF FAME — top row gold highlight ── */
+#hallOfFameTable tr:first-child td {
+  font-size: 15px;
 }
 
 /* ── CHART ── */
