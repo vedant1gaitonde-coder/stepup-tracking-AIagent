@@ -336,6 +336,31 @@ tr:hover {
   font-weight: bold;
 }
 
+/* ── CHAMPIONSHIP DATE PILLS ── */
+.champ-date-pill {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.champ-date-pill:hover {
+  background: #bae6fd;
+  border-color: #0369a1;
+}
+
+.champ-date-pill.active {
+  background: #1a1a2e;
+  color: #4ade80;
+  border-color: #4ade80;
+}
+
 /* ── CHART ── */
 canvas {
   background: white;
