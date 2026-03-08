@@ -129,6 +129,42 @@ function showApp() {
 
   loadAllData()
   showTab(isAdmin ? 'upload' : 'daily')
+  autoLoadYesterday()
+}
+
+async function autoLoadYesterday() {
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const dateStr = yesterday.toISOString().split('T')[0]
+
+  const snap = await db.collection('groups').doc(currentGroup)
+    .collection('history').doc(dateStr).get()
+
+  if (!snap.exists) return
+
+  const day = yesterday.getDay()
+  const data = []
+
+  snap.data().entries.forEach(p => {
+    let pts = 0
+    let note = ''
+    if (p.steps > 20000) {
+      pts = 8
+      note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
+    } else if (day === 0 && p.steps < 7000) {
+      pts = 10
+      note = '😴 Lazy Sunday rule (+10 pts)'
+    } else if (day === 0 && p.steps >= 7000) {
+      pts = 8
+      note = '🌞 Sunday walker! (10pts - 2pts = 8pts)'
+    } else if (day !== 0 && p.steps >= 10000) {
+      pts = 10
+      note = '🎯 10K Sweet Spot (+10 pts)'
+    }
+    data.push({ name: p.name, steps: p.steps, points: pts, note })
+  })
+
+  renderDaily(data)
 }
 
 // ─── LOAD ALL DATA ────────────────────────────────────
