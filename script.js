@@ -370,6 +370,28 @@ async function deleteDay() {
   penSnap.forEach(doc => batch.delete(doc.ref))
   await batch.commit()
 
+  // Recalculate progress from remaining history
+  const remainingSnap = await db.collection('groups').doc(currentGroup)
+    .collection('history').orderBy('date').get()
+
+  let newProgress = 0
+  let newChallengeStart = null
+
+  if (!remainingSnap.empty) {
+    const dates = []
+    remainingSnap.forEach(doc => dates.push(doc.id))
+    newChallengeStart = dates[0]
+    const start = new Date(newChallengeStart)
+    const last = new Date(dates[dates.length - 1])
+    newProgress = Math.floor((last - start) / (1000 * 60 * 60 * 24)) + 1
+    if (newProgress > 28) newProgress = 28
+  }
+
+  await db.collection('groups').doc(currentGroup).update({
+    progress: newProgress,
+    challengeStart: newChallengeStart
+  })
+
   await loadAllData()
   alert(`✅ Data for ${date} deleted!`)
 }
@@ -545,11 +567,19 @@ async function showHistory() {
   const day = new Date(date).getDay()
   const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day]
   document.getElementById('historyDayLabel').innerText = `${date} (${dayName})`
-  snap.data().entries.forEach(p => {
+  const entries = snap.data().entries
+  entries.forEach(p => {
+    let pts = 0
+    if (p.steps > 20000) pts = 8
+    else if (day === 0 && p.steps < 7000) pts = 10
+    else if (day === 0 && p.steps >= 7000) pts = 8
+    else if (day !== 0 && p.steps >= 10000) pts = 10
+    const color = pts > 0 ? 'color:green' : pts < 0 ? 'color:red' : ''
     body.innerHTML += `
       <tr>
         <td>${p.name}</td>
         <td>${Number(p.steps).toLocaleString()}</td>
+        <td style="${color}">${pts > 0 ? '+' : ''}${pts}</td>
       </tr>`
   })
 }
