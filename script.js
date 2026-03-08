@@ -212,12 +212,15 @@ async function processRows(rows, date) {
     let note = ''
 
     if (steps > 20000) {
-        pts = 8
-        note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
-        penalties.push({ name, steps, date })
-    }else if (day === 0 && steps < 7000) {
+      pts = 8
+      note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
+      penalties.push({ name, steps, date })
+    } else if (day === 0 && steps < 7000) {
       pts = 10
       note = '😴 Lazy Sunday rule (+10 pts)'
+    } else if (day === 0 && steps >= 7000) {
+      pts = 8
+      note = '🌞 Sunday walker! (10pts - 2pts = 8pts)'
     } else if (day !== 0 && steps >= 10000) {
       pts = 10
       note = '🎯 10K Sweet Spot (+10 pts)'
@@ -320,6 +323,7 @@ async function reverseOldData(date) {
     let pts = 0
     if (steps > 20000) pts = 8
     else if (day === 0 && steps < 7000) pts = 10
+    else if (day === 0 && steps >= 7000) pts = 8
     else if (day !== 0 && steps >= 10000) pts = 10
     membersMap[name].points -= pts
     membersMap[name].weekly -= steps
@@ -506,7 +510,6 @@ async function renderPenalties() {
         <td>${p.date}</td>
         <td>${p.name}</td>
         <td>${Number(p.steps).toLocaleString()}</td>
-        <td style="color:red">-2 pts</td>
         <td>😂 Must complete penalty task!</td>
       </tr>`
   })
