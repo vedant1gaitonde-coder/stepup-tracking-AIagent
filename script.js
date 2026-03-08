@@ -212,10 +212,10 @@ async function processRows(rows, date) {
     let note = ''
 
     if (steps > 20000) {
-      pts = -2
-      note = '😂 Penalty: Over 20k steps (-2 pts)'
-      penalties.push({ name, steps, date })
-    } else if (day === 0 && steps < 7000) {
+        pts = 8
+        note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
+        penalties.push({ name, steps, date })
+    }else if (day === 0 && steps < 7000) {
       pts = 10
       note = '😴 Lazy Sunday rule (+10 pts)'
     } else if (day !== 0 && steps >= 10000) {
@@ -318,7 +318,7 @@ async function reverseOldData(date) {
     const steps = Number(p.steps)
     if (!membersMap[name]) continue
     let pts = 0
-    if (steps > 20000) pts = -2
+    if (steps > 20000) pts = 8
     else if (day === 0 && steps < 7000) pts = 10
     else if (day !== 0 && steps >= 10000) pts = 10
     membersMap[name].points -= pts
