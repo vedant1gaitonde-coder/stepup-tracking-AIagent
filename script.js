@@ -787,6 +787,21 @@ async function generateChart() {
         fill: true,
         tension: 0.3
       }]
+    },
+    options: {
+      scales: {
+        y: {
+          min: 0,
+          ticks: {
+            padding: 15
+          }
+        }
+      },
+      layout: {
+        padding: {
+          bottom: 15
+        }
+      }
     }
   })
 }
