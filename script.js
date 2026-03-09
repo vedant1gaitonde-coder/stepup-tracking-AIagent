@@ -129,23 +129,28 @@ function showApp() {
 
   loadAllData()
   showTab(isAdmin ? 'upload' : 'daily')
-  autoLoadYesterday()
+  loadLatestDay()
 }
 
-async function autoLoadYesterday() {
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const dateStr = yesterday.toISOString().split('T')[0]
-
+// Loads the most recently uploaded day's data into the Daily tab.
+// This persists across days — it always shows the last uploaded entry
+// until a newer file is uploaded.
+async function loadLatestDay() {
   const snap = await db.collection('groups').doc(currentGroup)
-    .collection('history').doc(dateStr).get()
+    .collection('history').orderBy('date', 'desc').limit(1).get()
 
-  if (!snap.exists) return
+  if (snap.empty) return
 
-  const day = yesterday.getDay()
+  const latestDoc = snap.docs[0]
+  const dateStr = latestDoc.id
+  const entries = latestDoc.data().entries || []
+
+  const dateObj = new Date(dateStr)
+  const day = dateObj.getDay()
+  const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day]
+
   const data = []
-
-  snap.data().entries.forEach(p => {
+  entries.forEach(p => {
     let pts = 0
     let note = ''
     if (p.steps > 20000) {
@@ -164,7 +169,7 @@ async function autoLoadYesterday() {
     data.push({ name: p.name, steps: p.steps, points: pts, note })
   })
 
-  renderDaily(data)
+  renderDaily(data, dateStr, dayName)
 }
 
 // ─── LOAD ALL DATA ────────────────────────────────────
@@ -347,7 +352,9 @@ async function processRows(rows, date) {
 
   await batch.commit()
 
-  renderDaily(daily)
+  const uploadedDay = new Date(date).getDay()
+  const uploadedDayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][uploadedDay]
+  renderDaily(daily, date, uploadedDayName)
   await loadAllData()
   showTab('daily')
   alert(`✅ Data for ${date} uploaded successfully!`)
@@ -449,6 +456,7 @@ async function deleteDay() {
   })
 
   await loadAllData()
+  await loadLatestDay()
   alert(`✅ Data for ${date} deleted!`)
 }
 
@@ -573,7 +581,15 @@ async function renderUploadedDates() {
   })
 }
 
-function renderDaily(data) {
+function renderDaily(data, dateStr, dayName) {
+  // Update the card heading to show which date is displayed
+  const heading = document.querySelector('#daily .card h2')
+  if (heading) {
+    heading.innerText = dateStr
+      ? `📅 Daily Scoreboard — ${dateStr} (${dayName})`
+      : '📅 Daily Scoreboard'
+  }
+
   const body = document.querySelector('#dailyBoard tbody')
   body.innerHTML = ''
   data.sort((a, b) => b.steps - a.steps)
