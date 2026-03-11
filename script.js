@@ -188,9 +188,9 @@ async function loadLatestDay() {
 // ─── LOAD ALL DATA ────────────────────────────────────
 
 async function loadAllData() {
-  const snap = await db.collection('groups').doc(currentGroup).get()
-  const data = snap.data()
-  const progress = data.progress || 0
+  const historySnap = await db.collection('groups').doc(currentGroup)
+    .collection('history').get()
+  const progress = historySnap.size
   document.getElementById('progressText').innerText =
     'Challenge Progress: ' + progress + ' / 28 Days Completed'
   document.getElementById('progressBar').style.width =
@@ -627,7 +627,7 @@ async function renderWeekly() {
   snap.forEach(doc => {
     arr.push({ name: doc.id, ...doc.data() })
   })
-  arr.sort((a, b) => b.weekly - a.weekly)
+  arr.sort((a, b) => (b.points || 0) - (a.points || 0) || (b.weekly || 0) - (a.weekly || 0))
   const body = document.querySelector('#weeklyBoard tbody')
   body.innerHTML = ''
   arr.forEach((p, i) => {
