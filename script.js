@@ -288,13 +288,14 @@ async function processRows(rows, date) {
     if (steps > 20000) {
       pts = 8
       note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
-      penalties.push({ name, steps, date })
+      penalties.push({ name, steps, date, note: '😂 Must complete penalty task! (Over 20k steps)' })
     } else if (day === 0 && steps < 7000) {
       pts = 10
       note = '😴 Lazy Sunday rule (+10 pts)'
     } else if (day === 0 && steps >= 7000) {
       pts = 8
       note = '🌞 Sunday walker! (10pts - 2pts = 8pts)'
+      penalties.push({ name, steps, date, note: '🌞 Walked above 7,000 steps on Sunday (-2 pts)' })
     } else if (day !== 0 && steps >= 10000) {
       pts = 10
       note = '🎯 10K Sweet Spot (+10 pts)'
@@ -708,22 +709,66 @@ async function renderTotalSteps() {
 }
 
 async function renderPenalties() {
-  const snap = await db.collection('groups').doc(currentGroup)
-    .collection('penalties').orderBy('date').get()
   const body = document.querySelector('#penaltyTable tbody')
   body.innerHTML = ''
-  if (snap.empty) {
+
+  // 1. Load stored penalties (20k over-steppers)
+  const penSnap = await db.collection('groups').doc(currentGroup)
+    .collection('penalties').orderBy('date').get()
+
+  const rows = []
+
+  penSnap.forEach(doc => {
+    const p = doc.data()
+    rows.push({
+      date: p.date,
+      name: p.name,
+      steps: p.steps,
+      note: p.note || '😂 Must complete penalty task!'
+    })
+  })
+
+  // 2. Scan history for Sunday dates and add anyone with >= 7000 steps
+  const histSnap = await db.collection('groups').doc(currentGroup)
+    .collection('history').orderBy('date').get()
+
+  histSnap.forEach(doc => {
+    const date = doc.id
+    const day = new Date(date).getDay()
+    if (day !== 0) return // only Sundays
+
+    const entries = doc.data().entries || []
+    entries.forEach(p => {
+      if (Number(p.steps) >= 7000) {
+        // avoid duplicating if already stored as a penalty doc
+        const alreadyAdded = rows.some(r => r.date === date && r.name === p.name && r.note && r.note.includes('Sunday'))
+        if (!alreadyAdded) {
+          rows.push({
+            date,
+            name: p.name,
+            steps: p.steps,
+            note: '🌞 Walked above 7,000 steps on Sunday (-2 pts)'
+          })
+        }
+      }
+    })
+  })
+
+  if (rows.length === 0) {
     body.innerHTML = `<tr><td colspan="4" style="color:gray">No penalties yet 🎉</td></tr>`
     return
   }
-  snap.forEach(doc => {
-    const p = doc.data()
+
+  // Sort by date
+  rows.sort((a, b) => a.date.localeCompare(b.date))
+
+  rows.forEach(p => {
     body.innerHTML += `
       <tr>
         <td>${p.date}</td>
         <td>${p.name}</td>
         <td>${Number(p.steps).toLocaleString()}</td>
-        <td>😂 Must complete penalty task!</td>
+        <td>${p.note}</td>
       </tr>`
   })
 }
