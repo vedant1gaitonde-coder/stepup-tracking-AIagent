@@ -94,7 +94,6 @@ async function login() {
     }
 
     if (password === '') {
-      // Viewer mode — no password needed
       currentGroup = group
       isAdmin = false
       sessionStorage.setItem('group', group)
@@ -108,7 +107,6 @@ async function login() {
       return
     }
 
-    // Admin mode
     currentGroup = group
     isAdmin = true
     sessionStorage.setItem('group', group)
@@ -136,7 +134,6 @@ function showApp() {
     ? '👑 ' + currentGroup
     : '👁️ ' + currentGroup + ' (Viewer)'
 
-  // Hide admin-only tabs for viewers
   document.getElementById('navUpload').style.display = isAdmin ? 'block' : 'none'
   document.getElementById('navManage').style.display = isAdmin ? 'block' : 'none'
 
@@ -145,9 +142,8 @@ function showApp() {
   loadLatestDay()
 }
 
-// Loads the most recently uploaded day's data into the Daily tab.
-// This persists across days — it always shows the last uploaded entry
-// until a newer file is uploaded.
+// ─── LOAD LATEST DAY ──────────────────────────────────
+
 async function loadLatestDay() {
   const snap = await db.collection('groups').doc(currentGroup)
     .collection('history').orderBy('date', 'desc').limit(1).get()
@@ -303,10 +299,14 @@ async function processRows(rows, date) {
 
     membersMap[name].weekly += steps
 
-    if (membersMap[name].weekly >= 70000) {
+    // ✅ Consistency bonus only checked on Sunday, then reset
+    if (day === 0 && membersMap[name].weekly >= 70000) {
       membersMap[name].points += 10
       membersMap[name].weekly = 0
       note += ' 👑 Consistency Bonus! (+10 pts)'
+    } else if (day === 0) {
+      // Sunday but didn't hit 70k — reset weekly anyway for next week
+      membersMap[name].weekly = 0
     }
 
     membersMap[name].points += pts
@@ -328,10 +328,7 @@ async function processRows(rows, date) {
 
   if (diff >= 28) {
     if (confirm('28 day challenge complete! Start new challenge?')) {
-
-      // ── Save the champion before resetting ──
       await saveChampion(membersMap, challengeStart, date)
-
       challengeStart = date
       diff = 1
       for (let name in membersMap) {
@@ -399,8 +396,11 @@ async function reverseOldData(date) {
     else if (day === 0 && steps >= 7000) pts = 8
     else if (day !== 0 && steps >= 10000) pts = 10
     membersMap[name].points -= pts
-    membersMap[name].weekly -= steps
-    if (membersMap[name].weekly < 0) membersMap[name].weekly = 0
+    // Don't reverse weekly on Sunday since it gets reset
+    if (day !== 0) {
+      membersMap[name].weekly -= steps
+      if (membersMap[name].weekly < 0) membersMap[name].weekly = 0
+    }
   }
 
   const batch = db.batch()
@@ -447,7 +447,6 @@ async function deleteDay() {
   penSnap.forEach(doc => batch.delete(doc.ref))
   await batch.commit()
 
-  // Recalculate progress from remaining history
   const remainingSnap = await db.collection('groups').doc(currentGroup)
     .collection('history').orderBy('date').get()
 
@@ -476,10 +475,7 @@ async function deleteDay() {
 
 // ─── SAVE CHAMPION ────────────────────────────────────
 
-// Called when a 28-day challenge ends and the user confirms a new challenge.
-// Saves the full final standings plus the winner to the 'champions' subcollection.
 async function saveChampion(membersMap, challengeStart, challengeEnd) {
-  // Build sorted standings array from membersMap
   const standings = Object.keys(membersMap)
     .map(name => ({ name, points: membersMap[name].points || 0 }))
     .sort((a, b) => b.points - a.points)
@@ -487,8 +483,6 @@ async function saveChampion(membersMap, challengeStart, challengeEnd) {
   if (standings.length === 0) return
 
   const winner = standings[0]
-
-  // Document ID = challengeStart date so it's unique and chronological
   const docId = challengeStart
 
   await db.collection('groups').doc(currentGroup)
@@ -497,7 +491,7 @@ async function saveChampion(membersMap, challengeStart, challengeEnd) {
       challengeEnd,
       winnerName: winner.name,
       winnerPoints: winner.points,
-      standings,          // full ranked list saved for display
+      standings,
       savedAt: firebase.firestore.FieldValue.serverTimestamp()
     })
 }
@@ -521,8 +515,6 @@ async function renderWinners() {
   snap.forEach((doc, idx) => {
     const d = doc.data()
     const num = idx + 1
-
-    // Build mini standings list for the "Full Standings" column
     const standingsList = (d.standings || [])
       .map((p, i) => {
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`
@@ -531,7 +523,7 @@ async function renderWinners() {
       .join('<br>')
 
     body.innerHTML += `
-      <tr style="${num === 1 ? '' : ''}">
+      <tr>
         <td><strong>#${num}</strong></td>
         <td>${d.challengeStart} → ${d.challengeEnd}</td>
         <td style="font-weight:bold;color:#16a34a;font-size:15px">🏆 ${d.winnerName}</td>
@@ -547,7 +539,6 @@ async function renderHallOfFame() {
   const snap = await db.collection('groups').doc(currentGroup)
     .collection('champions').get()
 
-  // Count wins per person
   const winsMap = {}
   snap.forEach(doc => {
     const winner = doc.data().winnerName
@@ -565,8 +556,7 @@ async function renderHallOfFame() {
     return
   }
 
-  const sorted = Object.entries(winsMap)
-    .sort((a, b) => b[1] - a[1])
+  const sorted = Object.entries(winsMap).sort((a, b) => b[1] - a[1])
 
   sorted.forEach(([name, wins], i) => {
     const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1
@@ -596,7 +586,6 @@ async function renderUploadedDates() {
 }
 
 function renderDaily(data, dateStr, dayName) {
-  // Update the card heading to show which date is displayed
   const heading = document.querySelector('#daily .card h2')
   if (heading) {
     heading.innerText = dateStr
@@ -712,7 +701,6 @@ async function renderPenalties() {
   const body = document.querySelector('#penaltyTable tbody')
   body.innerHTML = ''
 
-  // 1. Load stored penalties (20k over-steppers)
   const penSnap = await db.collection('groups').doc(currentGroup)
     .collection('penalties').orderBy('date').get()
 
@@ -728,19 +716,17 @@ async function renderPenalties() {
     })
   })
 
-  // 2. Scan history for Sunday dates and add anyone with >= 7000 steps
   const histSnap = await db.collection('groups').doc(currentGroup)
     .collection('history').orderBy('date').get()
 
   histSnap.forEach(doc => {
     const date = doc.id
     const day = new Date(date).getDay()
-    if (day !== 0) return // only Sundays
+    if (day !== 0) return
 
     const entries = doc.data().entries || []
     entries.forEach(p => {
       if (Number(p.steps) >= 7000) {
-        // avoid duplicating if already stored as a penalty doc
         const alreadyAdded = rows.some(r => r.date === date && r.name === p.name && r.note && r.note.includes('Sunday'))
         if (!alreadyAdded) {
           rows.push({
@@ -759,7 +745,6 @@ async function renderPenalties() {
     return
   }
 
-  // Sort by date
   rows.sort((a, b) => a.date.localeCompare(b.date))
 
   rows.forEach(p => {
@@ -850,15 +835,11 @@ async function generateChart() {
       scales: {
         y: {
           min: 0,
-          ticks: {
-            padding: 15
-          }
+          ticks: { padding: 15 }
         }
       },
       layout: {
-        padding: {
-          bottom: 15
-        }
+        padding: { bottom: 15 }
       }
     }
   })
