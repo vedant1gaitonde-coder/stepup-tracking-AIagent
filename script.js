@@ -4,7 +4,7 @@ const firebaseConfig = {
   authDomain: "stepup-tracking-aiagent.firebaseapp.com",
   projectId: "stepup-tracking-aiagent",
   storageBucket: "stepup-tracking-aiagent.firebasestorage.app",
-  messagingSenderId: "991881910969",
+  messagingSenderId: "991881910869",
   appId: "1:991881910969:web:b407c19841b3f558111968"
 };
 
@@ -165,12 +165,12 @@ async function loadLatestDay() {
     if (p.steps > 20000) {
       pts = 8
       note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
-    } else if (day === 0 && p.steps < 7000) {
+    } else if (p.steps < 7000) {
       pts = 10
-      note = '😴 Lazy Sunday rule (+10 pts)'
+      note = '🛋️ Flexi Rest Day (+10 pts)'
     } else if (day === 0 && p.steps >= 7000) {
       pts = 8
-      note = '🌞 Sunday walker! (10pts - 2pts = 8pts)'
+      note = '🚶 Daily Walker penalty on Sunday (8 pts)'
     } else if (day !== 0 && p.steps >= 10000) {
       pts = 10
       note = '🎯 10K Sweet Spot (+10 pts)'
@@ -270,42 +270,68 @@ async function processRows(rows, date) {
     membersMap[doc.id] = doc.data()
   })
 
+  // ─── FLEXI REST DAY LOGIC ─────────────────────────
+  // On Monday, reset restUsed flag for all members
+  if (day === 1) {
+    for (let name in membersMap) {
+      membersMap[name].restUsed = false
+    }
+  }
+
   for (const r of rows) {
     const name = r['Name']
     const steps = Number(r['Total Steps'])
 
     if (!membersMap[name]) {
-      membersMap[name] = { points: 0, weekly: 0 }
+      membersMap[name] = { points: 0, weekly: 0, restUsed: false }
+    }
+
+    // Ensure restUsed exists
+    if (membersMap[name].restUsed === undefined) {
+      membersMap[name].restUsed = false
     }
 
     let pts = 0
     let note = ''
 
     if (steps > 20000) {
+      // Over 20k penalty
       pts = 8
       note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
       penalties.push({ name, steps, date, note: '😂 Must complete penalty task! (Over 20k steps)' })
-    } else if (day === 0 && steps < 7000) {
-      pts = 10
-      note = '😴 Lazy Sunday rule (+10 pts)'
+
+    } else if (steps < 7000) {
+      // Flexi Rest Day — first time this week
+      if (!membersMap[name].restUsed) {
+        pts = 10
+        note = '🛋️ Flexi Rest Day! First rest this week (+10 pts)'
+        membersMap[name].restUsed = true
+      } else {
+        pts = 0
+        note = '😴 Rest day already used this week (0 pts)'
+      }
+
     } else if (day === 0 && steps >= 7000) {
+      // Sunday with 7k+ steps — Daily Walker penalty
       pts = 8
-      note = '🌞 Sunday walker! (10pts - 2pts = 8pts)'
-      penalties.push({ name, steps, date, note: '🌞 Walked above 7,000 steps on Sunday (-2 pts)' })
+      note = '🚶 Daily Walker! Walked every day this week (8 pts)'
+      penalties.push({ name, steps, date, note: '🚶 Daily Walker — walked 7k+ every day including Sunday' })
+
     } else if (day !== 0 && steps >= 10000) {
+      // Regular weekday 10k+
       pts = 10
       note = '🎯 10K Sweet Spot (+10 pts)'
     }
 
+    // Weekly steps accumulation
     membersMap[name].weekly += steps
 
-    // ✅ Consistency bonus only checked on Sunday, then reset
+    // Consistency bonus — checked and reset on Sunday
     if (day === 0 && membersMap[name].weekly >= 70000) {
       membersMap[name].points += 10
       membersMap[name].weekly = 0
       note += ' 👑 Consistency Bonus! (+10 pts)'
     } else if (day === 0) {
-      // Sunday but didn't hit 70k — reset weekly anyway for next week
       membersMap[name].weekly = 0
     }
 
@@ -315,10 +341,9 @@ async function processRows(rows, date) {
     daily.push({ name, steps, points: pts, note })
   }
 
+  // ── Challenge progress ──
   let challengeStart = groupData.challengeStart
-  if (!challengeStart) {
-    challengeStart = date
-  }
+  if (!challengeStart) challengeStart = date
 
   const start = new Date(challengeStart)
   const now = new Date(date)
@@ -332,7 +357,7 @@ async function processRows(rows, date) {
       challengeStart = date
       diff = 1
       for (let name in membersMap) {
-        membersMap[name] = { points: 0, weekly: 0 }
+        membersMap[name] = { points: 0, weekly: 0, restUsed: false }
       }
     }
   }
@@ -391,12 +416,20 @@ async function reverseOldData(date) {
     const steps = Number(p.steps)
     if (!membersMap[name]) continue
     let pts = 0
-    if (steps > 20000) pts = 8
-    else if (day === 0 && steps < 7000) pts = 10
-    else if (day === 0 && steps >= 7000) pts = 8
-    else if (day !== 0 && steps >= 10000) pts = 10
+    if (steps > 20000) {
+      pts = 8
+    } else if (steps < 7000) {
+      // Only reverse if restUsed was true (meaning they got the 10 pts)
+      if (membersMap[name].restUsed) {
+        pts = 10
+        membersMap[name].restUsed = false
+      }
+    } else if (day === 0 && steps >= 7000) {
+      pts = 8
+    } else if (day !== 0 && steps >= 10000) {
+      pts = 10
+    }
     membersMap[name].points -= pts
-    // Don't reverse weekly on Sunday since it gets reset
     if (day !== 0) {
       membersMap[name].weekly -= steps
       if (membersMap[name].weekly < 0) membersMap[name].weekly = 0
@@ -716,30 +749,6 @@ async function renderPenalties() {
     })
   })
 
-  const histSnap = await db.collection('groups').doc(currentGroup)
-    .collection('history').orderBy('date').get()
-
-  histSnap.forEach(doc => {
-    const date = doc.id
-    const day = new Date(date).getDay()
-    if (day !== 0) return
-
-    const entries = doc.data().entries || []
-    entries.forEach(p => {
-      if (Number(p.steps) >= 7000) {
-        const alreadyAdded = rows.some(r => r.date === date && r.name === p.name && r.note && r.note.includes('Sunday'))
-        if (!alreadyAdded) {
-          rows.push({
-            date,
-            name: p.name,
-            steps: p.steps,
-            note: '🌞 Walked above 7,000 steps on Sunday (-2 pts)'
-          })
-        }
-      }
-    })
-  })
-
   if (rows.length === 0) {
     body.innerHTML = `<tr><td colspan="4" style="color:gray">No penalties yet 🎉</td></tr>`
     return
@@ -792,7 +801,7 @@ async function showHistory() {
   entries.forEach(p => {
     let pts = 0
     if (p.steps > 20000) pts = 8
-    else if (day === 0 && p.steps < 7000) pts = 10
+    else if (p.steps < 7000) pts = 10
     else if (day === 0 && p.steps >= 7000) pts = 8
     else if (day !== 0 && p.steps >= 10000) pts = 10
     const color = pts > 0 ? 'color:green' : pts < 0 ? 'color:red' : ''
