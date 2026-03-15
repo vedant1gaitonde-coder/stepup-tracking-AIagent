@@ -365,13 +365,13 @@ tr:hover {
   font-weight: bold;
 }
 
-/* ── WINNERS TABLE — Full Standings column left-aligned ── */
+/* ── WINNERS TABLE ── */
 #winnersTable td:last-child {
   text-align: left;
   line-height: 1.8;
 }
 
-/* ── HALL OF FAME — top row gold highlight ── */
+/* ── HALL OF FAME ── */
 #hallOfFameTable tr:first-child td {
   font-size: 15px;
 }
