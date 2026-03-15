@@ -158,24 +158,15 @@ async function loadLatestDay() {
   const day = dateObj.getDay()
   const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day]
 
+  // ✅ Read stored pts and note directly — don't recalculate
   const data = []
   entries.forEach(p => {
-    let pts = 0
-    let note = ''
-    if (p.steps > 20000) {
-      pts = 8
-      note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
-    } else if (p.steps < 7000) {
-      pts = 10
-      note = '🛋️ Flexi Rest Day (+10 pts)'
-    } else if (day === 0 && p.steps >= 7000) {
-      pts = 8
-      note = '🚶 Daily Walker penalty on Sunday (8 pts)'
-    } else if (day !== 0 && p.steps >= 10000) {
-      pts = 10
-      note = '🎯 10K Sweet Spot (+10 pts)'
-    }
-    data.push({ name: p.name, steps: p.steps, points: pts, note })
+    data.push({
+      name: p.name,
+      steps: p.steps,
+      points: p.pts !== undefined ? p.pts : 0,
+      note: p.note || ''
+    })
   })
 
   renderDaily(data, dateStr, dayName)
@@ -270,7 +261,6 @@ async function processRows(rows, date) {
     membersMap[doc.id] = doc.data()
   })
 
-  // ─── FLEXI REST DAY LOGIC ─────────────────────────
   // On Monday, reset restUsed flag for all members
   if (day === 1) {
     for (let name in membersMap) {
@@ -286,7 +276,6 @@ async function processRows(rows, date) {
       membersMap[name] = { points: 0, weekly: 0, restUsed: false }
     }
 
-    // Ensure restUsed exists
     if (membersMap[name].restUsed === undefined) {
       membersMap[name].restUsed = false
     }
@@ -295,13 +284,11 @@ async function processRows(rows, date) {
     let note = ''
 
     if (steps > 20000) {
-      // Over 20k penalty
       pts = 8
       note = '😂 Penalty: Over 20k steps (10pts - 2pts = 8pts)'
       penalties.push({ name, steps, date, note: '😂 Must complete penalty task! (Over 20k steps)' })
 
     } else if (steps < 7000) {
-      // Flexi Rest Day — first time this week
       if (!membersMap[name].restUsed) {
         pts = 10
         note = '🛋️ Flexi Rest Day! First rest this week (+10 pts)'
@@ -312,21 +299,17 @@ async function processRows(rows, date) {
       }
 
     } else if (day === 0 && steps >= 7000) {
-      // Sunday with 7k+ steps — Daily Walker penalty
       pts = 8
       note = '🚶 Daily Walker! Walked every day this week (8 pts)'
       penalties.push({ name, steps, date, note: '🚶 Daily Walker — walked 7k+ every day including Sunday' })
 
     } else if (day !== 0 && steps >= 10000) {
-      // Regular weekday 10k+
       pts = 10
       note = '🎯 10K Sweet Spot (+10 pts)'
     }
 
-    // Weekly steps accumulation
     membersMap[name].weekly += steps
 
-    // Consistency bonus — checked and reset on Sunday
     if (day === 0 && membersMap[name].weekly >= 70000) {
       membersMap[name].points += 10
       membersMap[name].weekly = 0
@@ -337,11 +320,11 @@ async function processRows(rows, date) {
 
     membersMap[name].points += pts
 
-    historyEntries.push({ name, steps })
+    // ✅ Store pts and note in history entry
+    historyEntries.push({ name, steps, pts, note })
     daily.push({ name, steps, points: pts, note })
   }
 
-  // ── Challenge progress ──
   let challengeStart = groupData.challengeStart
   if (!challengeStart) challengeStart = date
 
@@ -415,20 +398,26 @@ async function reverseOldData(date) {
     const name = p.name
     const steps = Number(p.steps)
     if (!membersMap[name]) continue
-    let pts = 0
-    if (steps > 20000) {
-      pts = 8
-    } else if (steps < 7000) {
-      // Only reverse if restUsed was true (meaning they got the 10 pts)
-      if (membersMap[name].restUsed) {
-        pts = 10
+
+    // ✅ Use stored pts if available, otherwise recalculate
+    let pts = p.pts !== undefined ? p.pts : 0
+    if (p.pts === undefined) {
+      if (steps > 20000) pts = 8
+      else if (steps < 7000) {
+        if (membersMap[name].restUsed) {
+          pts = 10
+          membersMap[name].restUsed = false
+        }
+      }
+      else if (day === 0 && steps >= 7000) pts = 8
+      else if (day !== 0 && steps >= 10000) pts = 10
+    } else {
+      // If rest day points were stored, reset the flag too
+      if (steps < 7000 && pts === 10) {
         membersMap[name].restUsed = false
       }
-    } else if (day === 0 && steps >= 7000) {
-      pts = 8
-    } else if (day !== 0 && steps >= 10000) {
-      pts = 10
     }
+
     membersMap[name].points -= pts
     if (day !== 0) {
       membersMap[name].weekly -= steps
@@ -797,13 +786,11 @@ async function showHistory() {
   const day = new Date(date).getDay()
   const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day]
   document.getElementById('historyDayLabel').innerText = `${date} (${dayName})`
+
+  // ✅ Read stored pts directly — don't recalculate
   const entries = snap.data().entries
   entries.forEach(p => {
-    let pts = 0
-    if (p.steps > 20000) pts = 8
-    else if (p.steps < 7000) pts = 10
-    else if (day === 0 && p.steps >= 7000) pts = 8
-    else if (day !== 0 && p.steps >= 10000) pts = 10
+    const pts = p.pts !== undefined ? p.pts : 0
     const color = pts > 0 ? 'color:green' : pts < 0 ? 'color:red' : ''
     body.innerHTML += `
       <tr>
