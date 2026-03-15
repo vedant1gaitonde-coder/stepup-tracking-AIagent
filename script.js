@@ -158,7 +158,6 @@ async function loadLatestDay() {
   const day = dateObj.getDay()
   const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day]
 
-  // ✅ Read stored pts and note directly — don't recalculate
   const data = []
   entries.forEach(p => {
     data.push({
@@ -204,6 +203,48 @@ function showTab(tabId) {
   document.getElementById(tabId).style.display = 'block'
   const navEl = document.querySelector(`[onclick="showTab('${tabId}')"]`)
   if (navEl) navEl.classList.add('active')
+}
+
+// ─── SHARE CARD ───────────────────────────────────────
+
+async function shareCard(cardId) {
+  const card = document.getElementById(cardId)
+  if (!card) return
+
+  try {
+    const btn = card.querySelector('button.secondary')
+    if (btn) btn.style.display = 'none'
+
+    const canvas = await html2canvas(card, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true
+    })
+
+    if (btn) btn.style.display = ''
+
+    canvas.toBlob(async blob => {
+      const file = new File([blob], 'scoreboard.png', { type: 'image/png' })
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: '🏃 Family Step Challenge',
+          text: 'Check out the latest scoreboard!'
+        })
+      } else {
+        // Fallback for desktop — download image
+        const link = document.createElement('a')
+        link.download = 'scoreboard.png'
+        link.href = canvas.toDataURL()
+        link.click()
+      }
+    }, 'image/png')
+
+  } catch (err) {
+    console.error('Share failed:', err)
+    alert('Could not share. Try downloading instead.')
+  }
 }
 
 // ─── UPLOAD ───────────────────────────────────────────
@@ -261,7 +302,6 @@ async function processRows(rows, date) {
     membersMap[doc.id] = doc.data()
   })
 
-  // On Monday, reset restUsed flag for all members
   if (day === 1) {
     for (let name in membersMap) {
       membersMap[name].restUsed = false
@@ -320,7 +360,6 @@ async function processRows(rows, date) {
 
     membersMap[name].points += pts
 
-    // ✅ Store pts and note in history entry
     historyEntries.push({ name, steps, pts, note })
     daily.push({ name, steps, points: pts, note })
   }
@@ -399,7 +438,6 @@ async function reverseOldData(date) {
     const steps = Number(p.steps)
     if (!membersMap[name]) continue
 
-    // ✅ Use stored pts if available, otherwise recalculate
     let pts = p.pts !== undefined ? p.pts : 0
     if (p.pts === undefined) {
       if (steps > 20000) pts = 8
@@ -412,7 +450,6 @@ async function reverseOldData(date) {
       else if (day === 0 && steps >= 7000) pts = 8
       else if (day !== 0 && steps >= 10000) pts = 10
     } else {
-      // If rest day points were stored, reset the flag too
       if (steps < 7000 && pts === 10) {
         membersMap[name].restUsed = false
       }
@@ -787,7 +824,6 @@ async function showHistory() {
   const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][day]
   document.getElementById('historyDayLabel').innerText = `${date} (${dayName})`
 
-  // ✅ Read stored pts directly — don't recalculate
   const entries = snap.data().entries
   entries.forEach(p => {
     const pts = p.pts !== undefined ? p.pts : 0

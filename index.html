@@ -5,6 +5,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -103,8 +104,9 @@
 
   <!-- TAB: DAILY -->
   <div class="tab-content" id="daily">
-    <div class="card">
+    <div class="card" id="dailyCard">
       <h2>📅 Daily Scoreboard</h2>
+      <button class="secondary" style="margin-bottom:12px" onclick="shareCard('dailyCard')">📸 Share</button>
       <table id="dailyBoard">
         <thead>
           <tr>
@@ -118,8 +120,9 @@
 
   <!-- TAB: WEEKLY -->
   <div class="tab-content" id="weekly">
-    <div class="card">
+    <div class="card" id="weeklyCard">
       <h2>📊 Weekly Scoreboard</h2>
+      <button class="secondary" style="margin-bottom:12px" onclick="shareCard('weeklyCard')">📸 Share</button>
       <table id="weeklyBoard">
         <thead>
           <tr>
@@ -133,8 +136,9 @@
 
   <!-- TAB: CHAMPIONSHIP -->
   <div class="tab-content" id="championship">
-    <div class="card">
+    <div class="card" id="championshipCard">
       <h2>🏆 4 Week Championship</h2>
+      <button class="secondary" style="margin-bottom:12px" onclick="shareCard('championshipCard')">📸 Share</button>
       <table id="monthBoard">
         <thead>
           <tr>
