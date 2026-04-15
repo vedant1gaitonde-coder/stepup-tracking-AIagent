@@ -174,9 +174,11 @@ async function loadLatestDay() {
 // ─── LOAD ALL DATA ────────────────────────────────────
 
 async function loadAllData() {
-  const historySnap = await db.collection('groups').doc(currentGroup)
-    .collection('history').get()
-  const progress = historySnap.size
+  const groupSnap = await db.collection('groups').doc(currentGroup).get()
+  const groupData = groupSnap.exists ? groupSnap.data() : {}
+  let progress = Number(groupData.progress || 0)
+  if (!Number.isFinite(progress) || progress < 0) progress = 0
+  if (progress > 28) progress = 28
   document.getElementById('progressText').innerText =
     'Challenge Progress: ' + progress + ' / 28 Days Completed'
   document.getElementById('progressBar').style.width =
@@ -250,7 +252,7 @@ async function shareCard(cardId) {
 
 // ─── HELPER: CHECK IF REST WAS USED THIS WEEK ────────
 
-async function hasRestBeenUsedThisWeek(name, uploadDate) {
+async function hasRestBeenUsedThisWeek(name, uploadDate, challengeStart = null) {
   // Find Monday of the week for uploadDate
   const uploadDateObj = new Date(uploadDate)
   const dayOfWeek = uploadDateObj.getDay()
@@ -272,7 +274,8 @@ async function hasRestBeenUsedThisWeek(name, uploadDate) {
   let restUsed = false
   historySnap.forEach(doc => {
     const docDate = new Date(doc.id)
-    if (docDate >= mondayDate && docDate <= uploadDateObj) {
+    const withinChallenge = !challengeStart || doc.id >= challengeStart
+    if (withinChallenge && docDate >= mondayDate && docDate <= uploadDateObj) {
       const entries = doc.data().entries || []
       const personEntry = entries.find(p => p.name === name)
       if (personEntry && personEntry.steps < 7000 && personEntry.note && personEntry.note.includes('Flexi Rest Day')) {
@@ -282,6 +285,20 @@ async function hasRestBeenUsedThisWeek(name, uploadDate) {
   })
   
   return restUsed
+}
+
+function setUploadModeUI() {
+  const modeEl = document.getElementById('importMode')
+  const dateEl = document.getElementById('dateInput')
+  if (!modeEl || !dateEl) return
+
+  const isSingle = modeEl.value === 'single'
+  dateEl.disabled = !isSingle
+  if (isSingle) {
+    dateEl.removeAttribute('title')
+  } else {
+    dateEl.setAttribute('title', 'Date is auto-read from date columns in bulk mode')
+  }
 }
 
 // ─── UPLOAD ───────────────────────────────────────────
@@ -294,9 +311,15 @@ function runAgent() {
 
   const file = document.getElementById('fileInput').files[0]
   const date = document.getElementById('dateInput').value
+  const importMode = document.getElementById('importMode').value
 
-  if (!file || !date) {
-    alert('Upload file and select date')
+  if (!file) {
+    alert('Upload a file')
+    return
+  }
+
+  if (importMode === 'single' && !date) {
+    alert('Select date for day-by-day upload')
     return
   }
 
@@ -306,22 +329,216 @@ function runAgent() {
     const workbook = XLSX.read(data, { type: 'array' })
     const sheet = workbook.Sheets[workbook.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet)
+    const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' })
 
-    const existing = await db
-      .collection('groups').doc(currentGroup)
-      .collection('history').doc(date).get()
-
-    if (existing.exists) {
-      if (!confirm(`Data for ${date} already exists. Overwrite it?`)) return
-      await reverseOldData(date)
+    if (importMode === 'single') {
+      const canContinue = await prepareDateUpload(date)
+      if (!canContinue) return
+      await processRows(rows, date)
+      return
     }
 
-    await processRows(rows, date)
+    const bulkMeta = extractBulkColumns(matrix)
+    const dateColumns = bulkMeta.dateColumns
+    if (dateColumns.length === 0) {
+      alert('No date columns found. Make sure header row has real date columns (text date or Excel date cells).')
+      return
+    }
+
+    if (bulkMeta.nameIndex < 0) {
+      alert('Name column not found in file header. Please include a Name column.')
+      return
+    }
+
+    let savedDays = 0
+    for (const dateCol of dateColumns) {
+      const dailyRows = buildRowsForDateFromMatrix(matrix, bulkMeta.nameIndex, dateCol.index)
+      if (dailyRows.length === 0) continue
+
+      const canContinue = await prepareDateUpload(dateCol.date)
+      if (!canContinue) {
+        alert('Bulk upload stopped.')
+        return
+      }
+
+      const saved = await processRows(dailyRows, dateCol.date, { silentSuccess: true })
+      if (!saved) {
+        alert('Bulk upload stopped.')
+        return
+      }
+
+      savedDays += 1
+    }
+
+    await loadAllData()
+    await loadLatestDay()
+    showTab('daily')
+    alert(`✅ Bulk upload completed for ${savedDays} day(s).`)
   }
   reader.readAsArrayBuffer(file)
 }
 
-async function processRows(rows, date) {
+function parseStepsValue(value) {
+  if (value === null || value === undefined || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const cleaned = String(value).replace(/,/g, '').trim()
+  const parsed = Number(cleaned)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatDateYYYYMMDD(dateObj) {
+  const y = dateObj.getFullYear()
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0')
+  const d = String(dateObj.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function excelSerialToDateString(serial) {
+  if (!Number.isFinite(serial) || serial < 1) return null
+  const parsed = XLSX.SSF.parse_date_code(serial)
+  if (!parsed || !parsed.y || !parsed.m || !parsed.d) return null
+  return `${String(parsed.y).padStart(4, '0')}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
+}
+
+function headerValueToDateString(value) {
+  if (value === null || value === undefined || value === '') return null
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return formatDateYYYYMMDD(value)
+  }
+
+  if (typeof value === 'number') {
+    return excelSerialToDateString(value)
+  }
+
+  const text = String(value).trim()
+  if (!text || /^#+$/.test(text)) return null
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+
+  if (/^\d+(\.\d+)?$/.test(text)) {
+    const asNumber = Number(text)
+    const fromSerial = excelSerialToDateString(asNumber)
+    if (fromSerial) return fromSerial
+  }
+
+  const parsedMs = Date.parse(text)
+  if (!Number.isNaN(parsedMs)) {
+    return formatDateYYYYMMDD(new Date(parsedMs))
+  }
+
+  return null
+}
+
+function extractBulkColumns(matrix) {
+  const headerRow = Array.isArray(matrix) && matrix.length > 0 ? matrix[0] : []
+
+  let nameIndex = -1
+  for (let i = 0; i < headerRow.length; i++) {
+    const headerText = String(headerRow[i] || '').trim().toLowerCase()
+    if (headerText === 'name' || headerText.includes('name')) {
+      nameIndex = i
+      break
+    }
+  }
+
+  const dateColumns = []
+  for (let i = 0; i < headerRow.length; i++) {
+    const dateText = headerValueToDateString(headerRow[i])
+    if (!dateText) continue
+    dateColumns.push({ index: i, date: dateText })
+  }
+
+  dateColumns.sort((a, b) => a.date.localeCompare(b.date))
+  return { nameIndex, dateColumns }
+}
+
+function buildRowsForDateFromMatrix(matrix, nameIndex, dateColIndex) {
+  const dailyRows = []
+  if (!Array.isArray(matrix)) return dailyRows
+
+  for (let r = 1; r < matrix.length; r++) {
+    const row = matrix[r] || []
+    const name = (row[nameIndex] || '').toString().trim()
+    if (!name) continue
+
+    dailyRows.push({
+      Name: name,
+      'Total Steps': parseStepsValue(row[dateColIndex])
+    })
+  }
+
+  return dailyRows
+}
+
+async function prepareDateUpload(date) {
+  const existing = await db
+    .collection('groups').doc(currentGroup)
+    .collection('history').doc(date).get()
+
+  if (!existing.exists) return true
+
+  if (!confirm(`Data for ${date} already exists. Overwrite it?`)) return false
+  await reverseOldData(date)
+  return true
+}
+
+function toDateOnlyString(d) {
+  return d.toISOString().split('T')[0]
+}
+
+function plusDays(dateStr, daysToAdd) {
+  const d = new Date(dateStr)
+  d.setDate(d.getDate() + daysToAdd)
+  return d
+}
+
+async function handleChallengeBoundary(uploadDate, membersMap, challengeStart) {
+  if (!challengeStart) {
+    return {
+      cancelled: false,
+      challengeStart: uploadDate,
+      membersMap
+    }
+  }
+
+  const start = new Date(challengeStart)
+  const now = new Date(uploadDate)
+  const dayNumber = Math.floor((now - start) / (1000 * 60 * 60 * 24)) + 1
+
+  if (dayNumber <= 28) {
+    return {
+      cancelled: false,
+      challengeStart,
+      membersMap
+    }
+  }
+
+  const challengeEnd = toDateOnlyString(plusDays(challengeStart, 27))
+  const shouldReset = confirm(
+    `Previous 28-day challenge (${challengeStart} to ${challengeEnd}) is complete. Start new challenge from ${uploadDate}?`
+  )
+
+  if (!shouldReset) {
+    return { cancelled: true, challengeStart, membersMap }
+  }
+
+  await saveChampion(membersMap, challengeStart, challengeEnd)
+
+  const resetMembers = {}
+  Object.keys(membersMap).forEach(name => {
+    resetMembers[name] = { points: 0, weekly: 0, restUsed: false }
+  })
+
+  return {
+    cancelled: false,
+    challengeStart: uploadDate,
+    membersMap: resetMembers
+  }
+}
+
+async function processRows(rows, date, options = {}) {
+  const silentSuccess = options.silentSuccess === true
   const day = new Date(date).getDay()
   const daily = []
   const historyEntries = []
@@ -339,6 +556,12 @@ async function processRows(rows, date) {
     membersMap[doc.id] = doc.data()
   })
 
+  let challengeStart = groupData.challengeStart
+  const boundaryResult = await handleChallengeBoundary(date, membersMap, challengeStart)
+  if (boundaryResult.cancelled) return false
+  challengeStart = boundaryResult.challengeStart
+  membersMap = boundaryResult.membersMap
+
   // On Monday, reset the weekly step counter (not restUsed)
   if (day === 1) {
     for (let name in membersMap) {
@@ -347,8 +570,10 @@ async function processRows(rows, date) {
   }
 
   for (const r of rows) {
-    const name = r['Name']
-    const steps = Number(r['Total Steps'])
+    const name = (r['Name'] || '').toString().trim()
+    const steps = parseStepsValue(r['Total Steps'])
+
+    if (!name) continue
 
     if (!membersMap[name]) {
       membersMap[name] = { points: 0, weekly: 0, restUsed: false }
@@ -368,7 +593,7 @@ async function processRows(rows, date) {
 
     } else if (steps < 7000) {
       // Scan history to check if rest was already used this week
-      const restAlreadyUsed = await hasRestBeenUsedThisWeek(name, date)
+      const restAlreadyUsed = await hasRestBeenUsedThisWeek(name, date, challengeStart)
       
       if (!restAlreadyUsed) {
         pts = 10
@@ -381,7 +606,7 @@ async function processRows(rows, date) {
 
     } else if (day === 0 && steps >= 7000) {
       // Check if this person used a rest day this week
-      const restWasUsedThisWeek = await hasRestBeenUsedThisWeek(name, date)
+      const restWasUsedThisWeek = await hasRestBeenUsedThisWeek(name, date, challengeStart)
       
       if (!restWasUsedThisWeek) {
         // Only award Daily Walker if NO rest day was used
@@ -415,25 +640,11 @@ async function processRows(rows, date) {
     daily.push({ name, steps, points: pts, note })
   }
 
-  let challengeStart = groupData.challengeStart
-  if (!challengeStart) challengeStart = date
-
   const start = new Date(challengeStart)
   const now = new Date(date)
   let diff = Math.floor((now - start) / (1000 * 60 * 60 * 24)) + 1
   if (diff < 0) diff = 0
   if (diff > 28) diff = 28
-
-  if (diff >= 28) {
-    if (confirm('28 day challenge complete! Start new challenge?')) {
-      await saveChampion(membersMap, challengeStart, date)
-      challengeStart = date
-      diff = 1
-      for (let name in membersMap) {
-        membersMap[name] = { points: 0, weekly: 0, restUsed: false }
-      }
-    }
-  }
 
   const batch = db.batch()
 
@@ -466,7 +677,11 @@ async function processRows(rows, date) {
   renderDaily(daily, date, uploadedDayName)
   await loadAllData()
   showTab('daily')
-  alert(`✅ Data for ${date} uploaded successfully!`)
+  if (!silentSuccess) {
+    alert(`✅ Data for ${date} uploaded successfully!`)
+  }
+
+  return true
 }
 
 async function reverseOldData(date) {
@@ -1079,6 +1294,7 @@ async function resetAll() {
 // ─── INIT ─────────────────────────────────────────────
 
 window.onload = function() {
+  setUploadModeUI()
   const saved = sessionStorage.getItem('group')
   if (saved) {
     currentGroup = saved

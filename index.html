@@ -89,10 +89,19 @@
     </div>
     <div class="card">
       <h2>📤 Upload Daily Steps File</h2>
+      <label>Import Mode:</label>
+      <select id="importMode" onchange="setUploadModeUI()">
+        <option value="single">Day by day (normal)</option>
+        <option value="bulk">Bulk by date columns (CSV/XLSX)</option>
+      </select>
+      <br>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
       <br>
       <label>Select Date:</label>
       <input type="date" id="dateInput">
+      <p style="color:gray;font-size:12px;margin-top:8px">
+        Bulk mode reads date headers like 2026-03-23, 2026-03-24 and uploads all days automatically.
+      </p>
       <br><br>
       <button onclick="runAgent()">▶️ Run Agent</button>
     </div>
